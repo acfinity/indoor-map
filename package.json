@@ -1,0 +1,51 @@
+{
+  "name": "indoor-map",
+  "version": "0.0.1",
+  "description": "an indoor map library, support 2d and 3d.",
+  "main": "index.js",
+  "scripts": {
+    "build": "rollup -c",
+    "build-closure": "cross-env BUILD_MODE=closure rollup -c && java -jar node_modules/google-closure-compiler-java/compiler.jar --warning_level=VERBOSE --jscomp_off=globalThis --jscomp_off=checkTypes --externs utils/build/externs.js --language_in=ECMASCRIPT_2018 --js build/xmap.js --js_output_file build/xmap.min.js",
+    "build-test": "webpack --config scripts/webpack.prod.config.js --mode production",
+    "build-github": "webpack --config scripts/webpack.prod.config.js --mode production",
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "dev": "webpack-dev-server --inline --progress --config scripts/webpack.dev.config.js --open --mode development ",
+    "dev:server": "node scripts/dev-server.js"
+  },
+  "keywords": [
+    "indoormap",
+    "XMap"
+  ],
+  "author": "xincept",
+  "license": "ISC",
+  "devDependencies": {
+    "@babel/core": "^7.1.6",
+    "@babel/preset-env": "^7.1.6",
+    "babel-loader": "^8.0.4",
+    "babel-preset-minify": "^0.5.0",
+    "clean-webpack-plugin": "^0.1.19",
+    "copy-webpack-plugin": "^4.5.4",
+    "cross-env": "^5.2.0",
+    "css-loader": "^1.0.1",
+    "eslint": "^5.9.0",
+    "eslint-plugin-prettier": "^3.0.0",
+    "extract-text-webpack-plugin": "^4.0.0-beta.0",
+    "google-closure-compiler": "^20181125.0.1",
+    "html-webpack-plugin": "^3.2.0",
+    "imports-loader": "^0.8.0",
+    "prettier": "^1.15.3",
+    "rollup": "^0.67.4",
+    "rollup-plugin-babel": "^4.0.3",
+    "rollup-plugin-eslint": "^5.0.0",
+    "rollup-plugin-postcss": "^1.6.3",
+    "rollup-plugin-replace": "^2.1.0",
+    "rollup-plugin-uglify": "^6.0.0",
+    "style-loader": "^0.23.1",
+    "uglifyjs-webpack-plugin": "^2.0.1",
+    "webpack": "^4.23.1",
+    "webpack-cli": "^3.1.2",
+    "webpack-dev-server": "^3.1.10",
+    "webpack-hot-middleware": "^2.24.3",
+    "webpack-merge": "^4.1.4"
+  }
+}

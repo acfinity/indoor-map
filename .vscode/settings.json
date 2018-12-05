@@ -1,0 +1,8 @@
+{
+    "window.zoomLevel": 0,
+    "extensions.ignoreRecommendations": true,
+    "eslint.validate": ["javascript", "javascriptreact", "html"],
+    "javascript.format.insertSpaceBeforeFunctionParenthesis": false,
+    "beautify.tabSize": 4,
+    "editor.tabSize": 4,
+}
