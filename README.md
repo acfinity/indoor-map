@@ -9,7 +9,7 @@ Demo: http://wolfwind521.github.io/
 # After checkout
 npm install -g eslint prettier
 
-install VSCode Extensions:
+Install VSCode Extensions:
 
 [<code>Prettier - Code formatter</code>](https://marketplace.visualstudio.com/items?itemName=esbenp.prettier-vscode)
 
