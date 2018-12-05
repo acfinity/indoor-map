@@ -37,7 +37,7 @@ class Room extends Base {
             context.fillStyle = '#333333'
             context.textBaseline = 'middle'
             context.font =
-                '13px/1.4 \'Lantinghei SC\', \'Microsoft YaHei\', \'Hiragino Sans GB\', \'Helvetica Neue\', Helvetica, STHeiTi, Arial, sans-serif'
+                "13px/1.4 'Lantinghei SC', 'Microsoft YaHei', 'Hiragino Sans GB', 'Helvetica Neue', Helvetica, STHeiTi, Arial, sans-serif"
             context.fillText(this.name, this.nameBounds.left, -this.nameBounds.center.y)
         }
     }

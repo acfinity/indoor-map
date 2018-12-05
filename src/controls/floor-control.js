@@ -25,16 +25,9 @@ class FloorControl extends BaseControl {
         if (floors.size < 2) {
             return
         }
-        appendHTML(
-            wrapper,
-            context(['All', ...building.floors.map(f => f.name).reverse()])
-        )
+        appendHTML(wrapper, context(['All', ...building.floors.map(f => f.name).reverse()]))
         let elements = [...wrapper.getElementsByTagName('li')]
-        elements.forEach(ele =>
-            ele.addEventListener('click', () =>
-                this.showFloor(floors.get(ele.innerHTML))
-            )
-        )
+        elements.forEach(ele => ele.addEventListener('click', () => this.showFloor(floors.get(ele.innerHTML))))
     }
 
     showFloor(floor) {

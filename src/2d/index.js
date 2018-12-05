@@ -9,12 +9,9 @@ import default2dTheme from './theme'
 import IndoorMapLoader from '../loader'
 import Size from '../model/size'
 import Overlay from '../overlay/overlay'
-import {
-    overlayMixins
-} from '../overlay'
+import { overlayMixins } from '../overlay'
 
 class Map {
-
     constructor(el, options = {}) {
         this.wrapper = typeof el == 'string' ? document.querySelector(el) : el
         this.wrapper.style.overflow = 'hidden'
@@ -24,7 +21,7 @@ class Map {
             showPubPoints: true,
             selectable: true,
             movable: true,
-            ...options
+            ...options,
         }
 
         this.refresh()
@@ -50,46 +47,45 @@ class Map {
         this.reset()
         this.theme = default2dTheme
         var loader = new IndoorMapLoader(false)
-        loader.load(fileName)
-            .then(mall => {
-                this.mall = mall;
-                this.showFloor()
-            })
+        loader.load(fileName).then(mall => {
+            this.mall = mall
+            this.showFloor()
+        })
     }
 
     getMall() {
-        return this.mall;
+        return this.mall
     }
 
-    setSelectable(selectable) { }
+    setSelectable(selectable) {}
 
     onSelectObject(event) {
         event.preventDefault()
     }
 
     theme() {
-        return this.theme;
+        return this.theme
     }
 
     showFloor(floorid) {
         if (this.mall == null) {
-            return;
+            return
         }
 
-        this.adjustCamera();
+        this.adjustCamera()
 
         return this
     }
 
     setDefaultView() {
-        this.renderer.setDefaultView();
+        this.renderer.setDefaultView()
 
-        this.controls.reset();
-        this.controls.viewChanged = true;
+        this.controls.reset()
+        this.controls.viewChanged = true
     }
 
     adjustCamera() {
-        this.setDefaultView();
+        this.setDefaultView()
     }
 
     addOverlay(overlay) {
@@ -102,7 +98,7 @@ class Map {
     }
 
     animate() {
-        requestAnimationFrame(() => this.animate());
+        requestAnimationFrame(() => this.animate())
         if (this.controls.viewChanged) {
             this.renderer.render(this.mall)
             this.controls.viewChanged = false

@@ -25,21 +25,21 @@ class IndicatorControl extends BaseControl {
 
     handleEvent(e) {
         switch (e.type) {
-        case 'mousedown':
-            this._start(e)
-            break
-        case 'mousemove':
-            this._move(e)
-            break
-        case 'mouseout':
-            this.initiated = false
-            break
-        case 'mouseup':
-            this._end(e)
-            break
-        case 'mousewheel':
-            this._wheel(e)
-            break
+            case 'mousedown':
+                this._start(e)
+                break
+            case 'mousemove':
+                this._move(e)
+                break
+            case 'mouseout':
+                this.initiated = false
+                break
+            case 'mouseup':
+                this._end(e)
+                break
+            case 'mousewheel':
+                this._wheel(e)
+                break
         }
     }
 
@@ -72,9 +72,7 @@ class IndicatorControl extends BaseControl {
         this.initiated = false
         if (this.prePoint === null) {
             console.log(`click at ${e.clientX}, ${e.clientY}`)
-            console.log(
-                this.renderer.worldToLocal(new Point(e.clientX, e.clientY))
-            )
+            console.log(this.renderer.worldToLocal(new Point(e.clientX, e.clientY)))
         }
     }
 

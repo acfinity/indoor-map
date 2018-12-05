@@ -87,11 +87,7 @@ class OrbitControl {
     }
 
     update() {
-        if (
-            Math.abs(this.thetaDelta) < EPS &&
-            Math.abs(this.phiDelta) < EPS &&
-            Math.abs(this.scale - 1) < EPS
-        ) {
+        if (Math.abs(this.thetaDelta) < EPS && Math.abs(this.phiDelta) < EPS && Math.abs(this.scale - 1) < EPS) {
             return
         }
 
@@ -102,10 +98,7 @@ class OrbitControl {
         var theta = Math.atan2(offset.x, offset.z)
         // angle from y-axis
 
-        var phi = Math.atan2(
-            Math.sqrt(offset.x * offset.x + offset.z * offset.z),
-            offset.y
-        )
+        var phi = Math.atan2(Math.sqrt(offset.x * offset.x + offset.z * offset.z), offset.y)
 
         if (this.autoRotate) {
             this.rotateLeft(autoRotationAngle)
@@ -146,16 +139,8 @@ class OrbitControl {
         this.startPosition = new THREE.Vector2()
         this.endPosition = new THREE.Vector2()
         this.deltaVector = new THREE.Vector2()
-        this.touchStartPoints = [
-            new THREE.Vector2(),
-            new THREE.Vector2(),
-            new THREE.Vector2(),
-        ]
-        this.touchEndPoints = [
-            new THREE.Vector2(),
-            new THREE.Vector2(),
-            new THREE.Vector2(),
-        ]
+        this.touchStartPoints = [new THREE.Vector2(), new THREE.Vector2(), new THREE.Vector2()]
+        this.touchEndPoints = [new THREE.Vector2(), new THREE.Vector2(), new THREE.Vector2()]
 
         this.phiDelta = 0
         this.thetaDelta = 0
@@ -193,39 +178,35 @@ class OrbitControl {
 
     handleEvent(e) {
         switch (e.type) {
-        case 'touchstart':
-        case 'mousedown':
-            if (e.touches && e.touches.length > 1) {
-                this._touchStart(e)
-            } else {
-                this._start(e)
-            }
-            break
-        case 'touchmove':
-        case 'mousemove':
-            if (
-                e.touches &&
-                    e.touches.length > 1 &&
-                    (this.state === STATE.ZOOM || this.state === STATE.ROTATE)
-            ) {
-                this._touchMove(e)
-            } else {
-                this._move(e)
-            }
-            break
-        case 'mouseout':
-            this.state = STATE.NONE
-            break
-        case 'touchend':
-        case 'mouseup':
-            this._end(e)
-            break
-        case 'mousewheel':
-            this._wheel(e)
-            break
-        case 'contextmenu':
-            e.preventDefault()
-            break
+            case 'touchstart':
+            case 'mousedown':
+                if (e.touches && e.touches.length > 1) {
+                    this._touchStart(e)
+                } else {
+                    this._start(e)
+                }
+                break
+            case 'touchmove':
+            case 'mousemove':
+                if (e.touches && e.touches.length > 1 && (this.state === STATE.ZOOM || this.state === STATE.ROTATE)) {
+                    this._touchMove(e)
+                } else {
+                    this._move(e)
+                }
+                break
+            case 'mouseout':
+                this.state = STATE.NONE
+                break
+            case 'touchend':
+            case 'mouseup':
+                this._end(e)
+                break
+            case 'mousewheel':
+                this._wheel(e)
+                break
+            case 'contextmenu':
+                e.preventDefault()
+                break
         }
         e.preventDefault()
     }
@@ -262,14 +243,8 @@ class OrbitControl {
                 return
             }
             if (this.state === STATE.ROTATE) {
-                this.rotateLeft(
-                    ((2 * Math.PI * this.deltaVector.x) / PIXELS_PER_ROUND) *
-                        userRotateSpeed
-                )
-                this.rotateUp(
-                    ((2 * Math.PI * this.deltaVector.y) / PIXELS_PER_ROUND) *
-                        userRotateSpeed
-                )
+                this.rotateLeft(((2 * Math.PI * this.deltaVector.x) / PIXELS_PER_ROUND) * userRotateSpeed)
+                this.rotateUp(((2 * Math.PI * this.deltaVector.y) / PIXELS_PER_ROUND) * userRotateSpeed)
             } else if (this.state === STATE.ZOOM) {
                 if (this.deltaVector.y > 0) {
                     this.zoomIn()
@@ -278,13 +253,7 @@ class OrbitControl {
                 }
             } else if (this.state === STATE.CLICK || this.state === STATE.PAN) {
                 this.state = STATE.PAN
-                this.pan(
-                    new THREE.Vector3(
-                        -this.deltaVector.x,
-                        this.deltaVector.y,
-                        0
-                    )
-                )
+                this.pan(new THREE.Vector3(-this.deltaVector.x, this.deltaVector.y, 0))
             }
             this.startPosition.copy(this.endPosition)
         } else if (this.onHoverListener && this.wrapper.contains(e.target)) {
@@ -316,9 +285,7 @@ class OrbitControl {
         if (!this.enabled) return
         ;[...e.touches]
             .filter((_, i) => i < 3)
-            .map(({ pageX, pageY }, index) =>
-                this.touchStartPoints[index].set(pageX, pageY)
-            )
+            .map(({ pageX, pageY }, index) => this.touchStartPoints[index].set(pageX, pageY))
         if (e.touches.length === 2) {
             this.state = STATE.ZOOM
             this.span.innerHTML = '_touchStart'
@@ -332,14 +299,10 @@ class OrbitControl {
         if (this.state === STATE.NONE) return
         ;[...e.touches]
             .filter((_, i) => i < 3)
-            .map(({ pageX, pageY }, index) =>
-                this.touchEndPoints[index].set(pageX, pageY)
-            )
+            .map(({ pageX, pageY }, index) => this.touchEndPoints[index].set(pageX, pageY))
         this.span.innerHTML = '_touchMove'
         if (this.state === STATE.ZOOM) {
-            let dStart = this.touchStartPoints[1].distanceTo(
-                this.touchStartPoints[0]
-            )
+            let dStart = this.touchStartPoints[1].distanceTo(this.touchStartPoints[0])
             let dEnd = this.touchEndPoints[1].distanceTo(this.touchEndPoints[0])
             if (Math.abs(dStart - dEnd) < 5) {
                 return
@@ -354,9 +317,6 @@ class OrbitControl {
     }
 }
 
-Object.assign(
-    OrbitControl.prototype,
-    Object.create(THREE.EventDispatcher.prototype)
-)
+Object.assign(OrbitControl.prototype, Object.create(THREE.EventDispatcher.prototype))
 
 export default OrbitControl
