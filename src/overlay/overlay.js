@@ -15,7 +15,8 @@ class Overlay {
         }
     }
 
-    setLocation(location /*animate*/) {
+    setLocation(location /*, animate*/) {
+        this.currentLocation = location
         this.object3D.position.copy(location.localPosition)
     }
 }

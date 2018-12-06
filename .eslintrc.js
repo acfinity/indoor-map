@@ -12,12 +12,13 @@ module.exports = {
     },
     plugins: ['prettier'],
     rules: {
-        indent: ['error', 4],
+        indent: ['error', 4, { SwitchCase: 1 }],
         'linebreak-style': [0, 'error', 'windows'],
         quotes: ['error', 'single'],
         semi: ['error', 'never'],
         'prettier/prettier': 'off',
         'no-console': 'off',
+        switchCase: 0,
     },
     globals: {
         console: true,

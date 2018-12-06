@@ -36,6 +36,7 @@ class OrbitControl {
         this.onClickListener = null
 
         this.onHoverListener = null
+        this.is3dMode = true
 
         this._initListeners()
         this._initVars()
@@ -49,11 +50,12 @@ class OrbitControl {
         this._initVars()
     }
 
-    pan(vector) {
-        let distance = vector.distanceTo(new THREE.Vector3())
-        vector.transformDirection(this.camera.matrix)
-        vector.multiplyScalar((distance * this.currentScale * 10) / 3)
-
+    pan(start, end) {
+        let vector = this.viewToWorld(start).sub(this.viewToWorld(end))
+        // let worldEnd = this.viewToWorld(end)
+        let offset = vector.length()
+        // if(offset>)
+        // console.log(offset)
         this.camera.position.add(vector)
         this.center.add(vector)
 
@@ -86,19 +88,49 @@ class OrbitControl {
         this.currentScale *= scale
     }
 
+    changeViewMode(is3dMode) {
+        if (this.is3dMode === is3dMode) {
+            return
+        }
+        let count = 10
+        this.is3dMode = is3dMode
+        if (is3dMode) {
+            let temp = setInterval(() => {
+                this.phiDelta = this.phi / 10
+                count--
+                if (!count) {
+                    clearInterval(temp)
+                }
+            }, 1000 / 60)
+        } else {
+            let temp = setInterval(() => {
+                this.phiDelta = -this.phi / 10
+                count--
+                if (!count) {
+                    clearInterval(temp)
+                }
+            }, 1000 / 60)
+        }
+    }
+
     update() {
-        if (Math.abs(this.thetaDelta) < EPS && Math.abs(this.phiDelta) < EPS && Math.abs(this.scale - 1) < EPS) {
+        if (
+            !this.viewChanged &&
+            Math.abs(this.thetaDelta) < EPS &&
+            Math.abs(this.phiDelta) < EPS &&
+            Math.abs(this.scale - 1) < EPS
+        ) {
             return
         }
 
-        var position = this.camera.position
-        var offset = position.clone().sub(this.center)
+        let position = this.camera.position
+        let offset = position.clone().sub(this.center)
 
         // angle from z-axis around y-axis
-        var theta = Math.atan2(offset.x, offset.z)
+        let theta = Math.atan2(offset.x, offset.z)
         // angle from y-axis
 
-        var phi = Math.atan2(Math.sqrt(offset.x * offset.x + offset.z * offset.z), offset.y)
+        let phi = Math.atan2(Math.sqrt(offset.x * offset.x + offset.z * offset.z), offset.y)
 
         if (this.autoRotate) {
             this.rotateLeft(autoRotationAngle)
@@ -111,9 +143,14 @@ class OrbitControl {
         phi = Math.max(this.minPolarAngle, Math.min(this.maxPolarAngle, phi))
 
         // restrict phi to be betwee EPS and PI-EPS
-        phi = Math.max(EPS, Math.min(Math.PI * 0.37 - EPS, phi))
+        phi = this.phi = Math.max(EPS, Math.min(Math.PI * 0.37 - EPS, phi))
+        if (this.is3dMode) {
+            this.phi = phi
+        } else {
+            // phi = 0
+        }
 
-        var radius = offset.length() / this.scale
+        let radius = offset.length() / this.scale
 
         // restrict radius to be between desired limits
         radius = Math.max(this.minDistance, Math.min(this.maxDistance, radius))
@@ -123,7 +160,6 @@ class OrbitControl {
         offset.z = radius * Math.sin(phi) * Math.cos(theta)
 
         position.copy(this.center).add(offset)
-
         this.camera.lookAt(this.center)
         this.thetaDelta = 0
         this.phiDelta = 0
@@ -142,6 +178,8 @@ class OrbitControl {
         this.touchStartPoints = [new THREE.Vector2(), new THREE.Vector2(), new THREE.Vector2()]
         this.touchEndPoints = [new THREE.Vector2(), new THREE.Vector2(), new THREE.Vector2()]
 
+        this.cameraInverseMatrix = new THREE.Matrix4()
+
         this.phiDelta = 0
         this.thetaDelta = 0
         this.scale = 1
@@ -155,7 +193,7 @@ class OrbitControl {
     }
 
     _initListeners(remove) {
-        var eventType = remove ? removeEvent : addEvent
+        let eventType = remove ? removeEvent : addEvent
         eventType(this.wrapper, 'touchstart', this, {
             passive: false,
         })
@@ -244,7 +282,8 @@ class OrbitControl {
             }
             if (this.state === STATE.ROTATE) {
                 this.rotateLeft(((2 * Math.PI * this.deltaVector.x) / PIXELS_PER_ROUND) * userRotateSpeed)
-                this.rotateUp(((2 * Math.PI * this.deltaVector.y) / PIXELS_PER_ROUND) * userRotateSpeed)
+                this.is3dMode &&
+                    this.rotateUp(((2 * Math.PI * this.deltaVector.y) / PIXELS_PER_ROUND) * userRotateSpeed)
             } else if (this.state === STATE.ZOOM) {
                 if (this.deltaVector.y > 0) {
                     this.zoomIn()
@@ -253,7 +292,7 @@ class OrbitControl {
                 }
             } else if (this.state === STATE.CLICK || this.state === STATE.PAN) {
                 this.state = STATE.PAN
-                this.pan(new THREE.Vector3(-this.deltaVector.x, this.deltaVector.y, 0))
+                this.pan(this.startPosition, this.endPosition)
             }
             this.startPosition.copy(this.endPosition)
         } else if (this.onHoverListener && this.wrapper.contains(e.target)) {
@@ -318,5 +357,21 @@ class OrbitControl {
 }
 
 Object.assign(OrbitControl.prototype, Object.create(THREE.EventDispatcher.prototype))
+Object.assign(OrbitControl.prototype, {
+    viewToWorld: (function() {
+        const raycaster = new THREE.Raycaster()
+        const vector = new THREE.Vector3(0, 0, 0.5)
+        const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0)
+
+        return function(point) {
+            vector.x = (point.x / this.wrapper.clientWidth) * 2 - 1
+            vector.y = -(point.y / this.wrapper.clientHeight) * 2 + 1
+            raycaster.setFromCamera(vector, this.camera)
+            let result = new THREE.Vector3()
+            raycaster.ray.intersectPlane(plane, result)
+            return result
+        }
+    })(),
+})
 
 export default OrbitControl

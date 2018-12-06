@@ -1,6 +1,7 @@
 import Map from './map'
 // import { IndoorMap3d } from './3d'
 // import Detector from './3d/detector'
+import * as Constants from './constants'
 import Models from './model/index'
 import Overlays from './overlay/index'
 import Objects from './objects/index'
@@ -12,6 +13,7 @@ if (IS_DEBUG) {
 
 export default {
     Map: Map,
+    ...Constants,
     ...Models,
     ...Overlays,
     ...THREE,

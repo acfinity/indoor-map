@@ -43,11 +43,20 @@ class Floor extends Base {
                 shape.holes.push(new THREE.Path(parsePoints(array)))
             })
         }
-        let geometry = new THREE.ExtrudeBufferGeometry(shape, extrudeSettings)
-        let material = new THREE.MeshPhongMaterial(this.mapStyle.floor)
-        let mesh = new THREE.Mesh(geometry, material)
-        mesh.name = 'floor borad'
-        mesh.position.set(0, 0, -10)
+
+        {
+            let geometry3d = new THREE.ExtrudeBufferGeometry(shape, extrudeSettings)
+            let geometry2d = new THREE.ShapeGeometry(shape)
+            let material = new THREE.MeshPhongMaterial(this.mapStyle.floor)
+            let mesh = new THREE.Mesh(geometry3d, material)
+            mesh.name = 'floor borad'
+            mesh.position.set(0, 0, -10)
+            mesh.onViewModeChange = is3dMode => {
+                mesh.geometry = is3dMode ? geometry3d : geometry2d
+                mesh.position.setZ(is3dMode ? -10 : -1)
+            }
+            object.add(mesh)
+        }
 
         object.height = floorHeight
 
@@ -62,8 +71,6 @@ class Floor extends Base {
                 object.sprites.push(roomObj.label)
                 object.add(roomObj)
             })
-        object.add(mesh)
-        this.object3D = object
 
         this.pubPoints.forEach(pp => {
             let pointObj = pp.makeObject3D()
@@ -71,6 +78,7 @@ class Floor extends Base {
             object.add(pointObj)
         })
 
+        this.object3D = object
         return object
     }
 

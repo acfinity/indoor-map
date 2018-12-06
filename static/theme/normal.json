@@ -1,6 +1,6 @@
 {
     "name": "test",
-    "background": "#F2F2F2",
+    "background": "#f2f2f2",
     "building": {
         "color": "#000000",
         "opacity": 0.1,
@@ -8,7 +8,7 @@
         "depthTest": false
     },
     "floor": {
-        "color": "#E0E0E0",
+        "color": "#e0e0e0",
         "opacity": 1,
         "transparent": false
     },

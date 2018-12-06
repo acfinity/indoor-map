@@ -6,6 +6,7 @@ import FloorControl from './controls/floor-control'
 import { addEvent } from './utils/event'
 import { mapObejctMixins } from './model/map-object'
 import { overlayMixins } from './overlay/index.js'
+import { ViewMode } from './constants'
 
 const PERSPECTIVE_FOV = 20
 const viewportMatrix = new THREE.Matrix4()
@@ -51,14 +52,10 @@ class Map {
         let width = this.wrapper.clientWidth,
             height = this.wrapper.clientHeight
         this._wrapperSize = new THREE.Vector2(width, height)
-        this._canvasScale = Math.round(height / Math.sin((PERSPECTIVE_FOV / 180) * Math.PI))
+        this._canvasScale_ = Math.round(height / Math.sin((PERSPECTIVE_FOV / 180) * Math.PI))
 
         this._scene = new THREE.Scene()
-        this._camera = new THREE.PerspectiveCamera(PERSPECTIVE_FOV, width / height, 140, 1000000)
-
-        this._sceneOrtho = new THREE.Scene()
-        this._cameraOrtho = new THREE.OrthographicCamera(-width / 2, height / 2, width / 2, -height / 2, 1, 10)
-        this._cameraOrtho.position.z = 10
+        this._camera = new THREE.PerspectiveCamera(PERSPECTIVE_FOV, width / height, 140, 100000)
 
         this.control = new OrbitControl(this._camera, this.mapWrapper)
         this.control.onClickListener = e => this._onClicked(e)
@@ -97,6 +94,16 @@ class Map {
         this.themeLoader = new ThemeLoader()
 
         addEvent(window, 'resize', () => this._refreshSize())
+        addEvent(window, 'keydown', e => {
+            switch (e.keyCode) {
+                case 79:
+                    this.building.object3D.scale.multiplyScalar(0.8)
+                    break
+                case 80:
+                    this.building.object3D.scale.multiplyScalar(1.25)
+                    break
+            }
+        })
     }
 
     load(fileName) {
@@ -112,6 +119,7 @@ class Map {
 
             this.setDefaultView()
             this.animate()
+            this.building.updateBound(this._camera)
         })
     }
 
@@ -120,10 +128,10 @@ class Map {
     }
 
     setDefaultView() {
-        var camAngle = Math.PI / 2
-        var camDir = [Math.cos(camAngle), Math.sin(camAngle)]
-        var camLen = 5000
-        var tiltAngle = (75.0 * Math.PI) / 180.0
+        let camAngle = Math.PI / 2
+        let camDir = [Math.cos(camAngle), Math.sin(camAngle)]
+        let camLen = 5000
+        let tiltAngle = (75.0 * Math.PI) / 180.0
         this._camera.position.set(-camDir[1] * camLen, Math.sin(tiltAngle) * camLen, camDir[0] * camLen)
         this._camera.lookAt(this._scene.position)
 
@@ -145,6 +153,25 @@ class Map {
         this._removeOverlays(this._overlays)
     }
 
+    setViewMode(mode) {
+        if ((mode !== ViewMode.MODE_2D && mode !== ViewMode.MODE_3D) || mode === this._currentViewMode) {
+            return
+        }
+        this._currentViewMode = mode
+        this._changeViewMode(mode === ViewMode.MODE_3D)
+    }
+
+    _changeViewMode(is3dMode) {
+        this.control.changeViewMode(is3dMode)
+        function changeViewMode(object) {
+            if (object.onViewModeChange) object.onViewModeChange(is3dMode)
+            if (object.children && object.children.length > 0) {
+                object.children.forEach(obj => changeViewMode(obj))
+            }
+        }
+        changeViewMode(this.building.object3D)
+    }
+
     _removeOverlays(overlays) {
         overlays.forEach(overlay => {
             overlay.removeFromParent()
@@ -163,7 +190,7 @@ class Map {
     _onClicked(e) {
         // e.preventDefault();
 
-        var mouse = new THREE.Vector2()
+        let mouse = new THREE.Vector2()
         if (e.type == 'touchstart') {
             mouse.x = (e.touches[0].clientX / this._wrapperSize.width) * 2 - 1
             mouse.y = -(e.touches[0].clientY / this._wrapperSize.height) * 2 + 1
@@ -171,7 +198,7 @@ class Map {
             mouse.x = (e.clientX / this._wrapperSize.width) * 2 - 1
             mouse.y = -(e.clientY / this._wrapperSize.height) * 2 + 1
         }
-        var vector = new THREE.Vector3(mouse.x, mouse.y, 0.5)
+        let vector = new THREE.Vector3(mouse.x, mouse.y, 0.5)
         if (!this._raycaster) {
             this._raycaster = new THREE.Raycaster()
         }
@@ -186,7 +213,7 @@ class Map {
     _onHover(e) {
         // e.preventDefault();
 
-        var mouse = new THREE.Vector2()
+        let mouse = new THREE.Vector2()
         if (e.type == 'touchstart') {
             mouse.x = (e.touches[0].clientX / this._wrapperSize.width) * 2 - 1
             mouse.y = -(e.touches[0].clientY / this._wrapperSize.height) * 2 + 1
@@ -194,12 +221,13 @@ class Map {
             mouse.x = (e.clientX / this._wrapperSize.width) * 2 - 1
             mouse.y = -(e.clientY / this._wrapperSize.height) * 2 + 1
         }
-        var vector = new THREE.Vector3(mouse.x, mouse.y, 0.5)
+        let vector = new THREE.Vector3(mouse.x, mouse.y, 0.5)
         if (!this._raycaster) {
             this._raycaster = new THREE.Raycaster()
         }
+        let intersects
         this._raycaster.setFromCamera(vector, this._camera)
-        let intersects = this._raycaster.intersectObjects([...this._overlays].map(overlay => overlay.object3D), false)
+        intersects = this._raycaster.intersectObjects([...this._overlays].map(overlay => overlay.object3D), false)
         let hoveredEntity
         if (intersects.length > 0) {
             hoveredEntity = intersects[0]
@@ -223,16 +251,10 @@ class Map {
         let width = this.wrapper.clientWidth,
             height = this.wrapper.clientHeight
         this._wrapperSize = new THREE.Vector2(width, height)
-        this._canvasScale = Math.round(height / Math.sin((PERSPECTIVE_FOV / 180) * Math.PI))
+        this._canvasScale_ = Math.round(height / Math.sin((PERSPECTIVE_FOV / 180) * Math.PI))
 
         this._camera.aspect = width / height
         this._camera.updateProjectionMatrix()
-
-        this._cameraOrtho.left = -width / 2
-        this._cameraOrtho.top = height / 2
-        this._cameraOrtho.right = width / 2
-        this._cameraOrtho.bottom = -height / 2
-        this._cameraOrtho.updateProjectionMatrix()
 
         this.renderer.setSize(width, height)
     }
@@ -240,10 +262,12 @@ class Map {
     animate() {
         requestAnimationFrame(() => this.animate())
         this.control.update()
-
-        this.building && this.building.updateBound(this._camera)
+        if (this.control.viewChanged) {
+            this.building && this.building.updateBound(this._camera)
+        }
 
         this.renderer.clear()
+
         this.renderer.render(this._scene, this._camera)
 
         this.renderer.clearDepth()
@@ -270,5 +294,17 @@ class Map {
         }
     }
 }
+
+Object.defineProperties(Map.prototype, {
+    _canvasScale: {
+        get: function() {
+            if (this._camera instanceof THREE.PerspectiveCamera) {
+                return this._canvasScale_
+            } else {
+                return 1
+            }
+        },
+    },
+})
 
 export default Map

@@ -8,7 +8,7 @@ class Marker extends Overlay {
         super()
 
         this.options = options
-
+        this.currentLocation = location
         this.location = location
         this.floor = location.floor
         this.position = location.localPosition
@@ -45,6 +45,7 @@ class Marker extends Overlay {
             sprite.center.set(0.5, 0)
         }
         sprite.renderOrder = 10
+        sprite.onViewModeChange = is3dMode => sprite.position.setZ(is3dMode ? this.currentLocation.z : 3)
         this.object3D = sprite
         return sprite
     }

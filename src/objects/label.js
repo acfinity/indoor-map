@@ -37,8 +37,8 @@ Label.prototype = Object.assign(Object.create(Sprite.prototype), {
     isLabel: true,
     setText(text) {
         this.text = text
-        let fontface = this.options['fontface'] || 'Arial'
-        let fontsize = this.options.fontsize || 14
+        let fontface = this.options['fontface'] || 'sans-serif'
+        let fontsize = this.options.fontsize || 16
         let color = this.options.color || 'rgba(0,0,0,1)'
 
         let canvas = this.canvas
