@@ -1,6 +1,5 @@
 import BaseControl from './base-control'
 import { compileTemplate, appendHTML } from '../utils/view'
-import '../assets/css/main.css'
 
 const TEMPLATE = `
 <ul class='imap-floor-control'>

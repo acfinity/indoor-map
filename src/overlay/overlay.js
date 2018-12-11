@@ -39,30 +39,6 @@ Object.defineProperties(Overlay.prototype, {
         },
     },
 
-    onHover: {
-        enumerable: false,
-        configurable: false,
-        get: function() {
-            return this.options && this.options.onHover
-        },
-    },
-
-    onClick: {
-        enumerable: false,
-        configurable: false,
-        get: function() {
-            return this.options && this.options.onClick
-        },
-    },
-
-    onAppend: {
-        enumerable: false,
-        configurable: false,
-        get: function() {
-            return this.options && this.options.onAppend
-        },
-    },
-
     isOverlay: {
         value: true,
         writable: false,

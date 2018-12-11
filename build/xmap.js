@@ -47711,7 +47711,7 @@
 	            return
 	        }
 	        let point = e.touches ? e.touches[0] : e;
-	        vector.set((point.pageX / mo.wrapper.clientWidth) * 2 - 1, -(point.pageY / mo.wrapper.clientHeight) * 2 + 1, 0.5);
+	        vector.set((point.pageX / mo.$wrapper.clientWidth) * 2 - 1, -(point.pageY / mo.$wrapper.clientHeight) * 2 + 1, 0.5);
 	        raycaster.setFromCamera(vector, mo._camera);
 	        return raycaster.intersectObjects(
 	            [...mo._overlays]
@@ -47814,31 +47814,28 @@
 	        },
 	    },
 
-	    onHover: {
-	        enumerable: false,
-	        configurable: false,
-	        get: function() {
-	            return this.options && this.options.onHover
-	        },
-	    },
-
-	    onClick: {
-	        enumerable: false,
-	        configurable: false,
-	        get: function() {
-	            return this.options && this.options.onClick
-	        },
-	    },
-
-	    onAppend: {
-	        enumerable: false,
-	        configurable: false,
-	        get: function() {
-	            return this.options && this.options.onAppend
-	        },
-	    },
-
 	    isOverlay: {
+	        value: true,
+	        writable: false,
+	    },
+	});
+
+	class HTMLOverlay extends Overlay {
+	    constructor(location, options = {}) {
+	        super();
+
+	        this.location = location;
+	        this.options = options;
+
+	        if (typeof this.initialize !== 'function' || typeof this.render !== 'function') {
+	            throw new Error('initialize && render must be implements')
+	        }
+	        this.$el = this.initialize();
+	    }
+	}
+
+	Object.defineProperties(HTMLOverlay.prototype, {
+	    isHTMLOverlay: {
 	        value: true,
 	        writable: false,
 	    },
@@ -47895,9 +47892,36 @@
 	    }
 	}
 
+	class HTMLInfoWindow extends HTMLOverlay {
+	    constructor(location, options) {
+	        super(location, options);
+	    }
+
+	    initialize() {
+	        let span = document.createElement('span');
+	        span.style.border = 'solid 1px red';
+	        span.style.background = 'white';
+	        span.style.position = 'absolute';
+	        span.style.padding = '3px 4px';
+	        span.style.padding = '3px 4px';
+	        span.style.width = '130px';
+	        span.style.fontSize = '14px';
+	        span.appendChild(document.createTextNode(this.options.content));
+	        return span
+	    }
+
+	    render(position) {
+	        this.$el.style.left = position.x + 'px';
+	        this.$el.style.top = position.y - this.$el.clientHeight + 'px';
+	        this.$el.style.zIndex = position.zIndex;
+	    }
+	}
+
 	var Overlays = {
 	    Overlay,
+	    HTMLOverlay,
 	    Marker,
+	    HTMLInfoWindow,
 	};
 
 	function overlayMixin(XMap) {
@@ -47917,9 +47941,14 @@
 
 	        _addOverlay(overlay) {
 	            if (this.building) {
-	                let floorObj = this.building.getFloor(overlay.floor).object3D;
-	                floorObj.add(overlay.object3D);
-	                overlay.onAppend && overlay.onAppend(floorObj);
+	                if (overlay.isHTMLOverlay) {
+	                    this.$overlayWrapper.appendChild(overlay.$el);
+	                    overlay.render(this.locationToViewport(overlay.location));
+	                } else {
+	                    let floorObj = this.building.getFloor(overlay.floor).object3D;
+	                    floorObj.add(overlay.object3D);
+	                    overlay.onAppend && overlay.onAppend(floorObj);
+	                }
 	            }
 	        },
 
@@ -48065,15 +48094,6 @@
 	    }
 
 	    update() {
-	        if (
-	            !this.viewChanged &&
-	            Math.abs(this.thetaDelta) < EPS &&
-	            Math.abs(this.phiDelta) < EPS &&
-	            Math.abs(this.scale - 1) < EPS
-	        ) {
-	            return
-	        }
-
 	        let position = this.camera.position;
 	        let offset = position.clone().sub(this.center);
 
@@ -48381,36 +48401,6 @@
 	    fragment = null;
 	};
 
-	function styleInject(css, ref) {
-	  if ( ref === void 0 ) ref = {};
-	  var insertAt = ref.insertAt;
-
-	  if (!css || typeof document === 'undefined') { return; }
-
-	  var head = document.head || document.getElementsByTagName('head')[0];
-	  var style = document.createElement('style');
-	  style.type = 'text/css';
-
-	  if (insertAt === 'top') {
-	    if (head.firstChild) {
-	      head.insertBefore(style, head.firstChild);
-	    } else {
-	      head.appendChild(style);
-	    }
-	  } else {
-	    head.appendChild(style);
-	  }
-
-	  if (style.styleSheet) {
-	    style.styleSheet.cssText = css;
-	  } else {
-	    style.appendChild(document.createTextNode(css));
-	  }
-	}
-
-	var css = "/* CSS */\r\n\r\n.imap-controls, .imap-overlays {\r\n    position: absolute;\r\n    top: 0;\r\n    left: 0;\r\n    width: 100%;\r\n    height: 100%;\r\n    pointer-events: none;\r\n    overflow: hidden;\r\n}\r\n\r\n.imap-controls *, .imap-overlays * {\r\n    pointer-events: auto;\r\n}\r\n\r\n.imap-overlays span {\r\n    position: absolute;\r\n    display: none;\r\n    padding: 7px;\r\n    background: white;\r\n    border: solid 1px #ccc;\r\n    max-width: 140px;\r\n}\r\n\r\n.imap-floor-control {\r\n    position: absolute;\r\n    right: 10px;\r\n    top: 10px;\r\n    z-index: 100;\r\n    background: white;\r\n    border: solid 1px #dfdfdf;\r\n    text-align: center;\r\n    border-radius: 3px;\r\n    font-size: 14px;\r\n    padding: 0;\r\n}\r\n\r\n.imap-floor-control li {\r\n    list-style: none;\r\n    line-height: 25px;\r\n    width: 25px;\r\n    height: 25px;\r\n    border-bottom: solid 1px #dfdfdf;\r\n}\r\n\r\n.imap-floor-control li:last-child {\r\n    border-bottom: none;\r\n}";
-	styleInject(css);
-
 	const TEMPLATE = `
 <ul class='imap-floor-control'>
   <% for(let i=0; i < data.length; i++) { %>
@@ -48553,6 +48543,7 @@
 	                    }
 	                } else {
 	                    floor.localToWorld(worldPosition);
+	                    let distance = worldPosition.distanceTo(this._camera.position);
 	                    worldPosition.project(this._camera);
 	                    screenPosition
 	                        .copy(worldPosition)
@@ -48561,6 +48552,7 @@
 	                    return {
 	                        x: screenPosition.x,
 	                        y: screenPosition.y,
+	                        distance: distance,
 	                    }
 	                }
 	            }
@@ -48575,24 +48567,24 @@
 	}
 
 	function initDom(mo) {
-	    mo.mapWrapper = document.createElement('div');
-	    mo.mapWrapper.style.overflow = 'hidden';
-	    mo.mapWrapper.style.width = '100%';
-	    mo.mapWrapper.style.height = '100%';
-	    mo.wrapper.appendChild(mo.mapWrapper);
+	    mo.$mapWrapper = document.createElement('div');
+	    mo.$mapWrapper.style.overflow = 'hidden';
+	    mo.$mapWrapper.style.width = '100%';
+	    mo.$mapWrapper.style.height = '100%';
+	    mo.$wrapper.appendChild(mo.$mapWrapper);
 
-	    mo.overlayWrapper = document.createElement('div');
-	    mo.overlayWrapper.className = 'imap-overlays';
-	    mo.wrapper.appendChild(mo.overlayWrapper);
+	    mo.$overlayWrapper = document.createElement('div');
+	    mo.$overlayWrapper.className = 'imap-overlays';
+	    mo.$wrapper.appendChild(mo.$overlayWrapper);
 
-	    mo.controlWrapper = document.createElement('div');
-	    mo.controlWrapper.className = 'imap-controls';
-	    mo.wrapper.appendChild(mo.controlWrapper);
+	    mo.$controlWrapper = document.createElement('div');
+	    mo.$controlWrapper.className = 'imap-controls';
+	    mo.$wrapper.appendChild(mo.$controlWrapper);
 	}
 
 	function initThree(mo) {
-	    let width = mo.wrapper.clientWidth,
-	        height = mo.wrapper.clientHeight;
+	    let width = mo.$wrapper.clientWidth,
+	        height = mo.$wrapper.clientHeight;
 	    mo._canvasScale = Math.round(height / Math.sin((PERSPECTIVE_FOV / 180) * Math.PI));
 
 	    mo._scene = new THREE$1.Scene();
@@ -48617,11 +48609,11 @@
 	    mo.renderer.autoClear = false;
 	    mo.renderer.setClearColor('#ffffff');
 	    mo.renderer.setSize(width, height);
-	    let canvasDiv = mo.renderer.domElement;
-	    mo.mapWrapper.appendChild(canvasDiv);
-	    canvasDiv.style.width = '100%';
-	    canvasDiv.style.height = '100%';
-	    canvasDiv.style.opacity = 0;
+	    let $canvasDiv = mo.renderer.domElement;
+	    mo.$mapWrapper.appendChild($canvasDiv);
+	    $canvasDiv.style.width = '100%';
+	    $canvasDiv.style.height = '100%';
+	    $canvasDiv.style.opacity = 0;
 
 	    let hw = width / 2,
 	        hh = height / 2;
@@ -48633,8 +48625,8 @@
 	    initThree(mo);
 
 	    function refreshSize() {
-	        let width = mo.wrapper.clientWidth,
-	            height = mo.wrapper.clientHeight;
+	        let width = mo.$wrapper.clientWidth,
+	            height = mo.$wrapper.clientHeight;
 	        mo._canvasScale = Math.round(height / Math.sin((PERSPECTIVE_FOV / 180) * Math.PI));
 
 	        mo._camera.aspect = width / height;
@@ -48644,6 +48636,8 @@
 	        let hw = width / 2,
 	            hh = height / 2;
 	        mo.viewportMatrix.set(hw, 0, 0, hw, 0, -hh, 0, hh);
+
+	        mo.updateProjectionMatrix = true;
 	    }
 	    addEvent(window, 'resize', () => refreshSize());
 	}
@@ -49341,7 +49335,7 @@
 	    Object.assign(XMap.prototype, {
 	        load(fileName) {
 	            this.mapLoader.load(fileName).then(building => {
-	                this.floorControl.show(this.controlWrapper, building);
+	                this.floorControl.show(this.$controlWrapper, building);
 	                this.building = building;
 	                this.renderer.setClearColor('#ffffff');
 	                this._scene.add(building.object3D);
@@ -49351,7 +49345,10 @@
 	                this._overlays.forEach(overlay => this._addOverlay(overlay));
 
 	                this.setDefaultView();
-	                this.animate();
+	                if (!this.renderStarted) {
+	                    this.renderStarted = true;
+	                    this.render();
+	                }
 	                this.renderer.domElement.style.opacity = 1;
 	                this.building.updateBound(this);
 	                this.setViewMode(this.options.viewMode);
@@ -49376,41 +49373,102 @@
 	    Object.assign(XMap.prototype, {
 	        _init(el, options) {
 	            this.options = options;
-	            this.wrapper = typeof el == 'string' ? document.querySelector(el) : el;
-	            this.wrapper.style.overflow = 'hidden';
+	            this.$wrapper = typeof el == 'string' ? document.querySelector(el) : el;
+	            this.$wrapper.style.overflow = 'hidden';
 
 	            this._overlays = new Set();
 
 	            initView(this);
 
-	            this.control = new OrbitControl(this._camera, this.mapWrapper);
-	            this.floorControl = new FloorControl(this._camera, this.mapWrapper);
+	            this.control = new OrbitControl(this._camera, this.$mapWrapper);
+	            this.floorControl = new FloorControl(this._camera, this.$mapWrapper);
 
 	            initEvent(this);
 	            initLoaders(this);
 
 	            mapObejctMixins(this);
 	            overlayMixins(this);
+
+	            window.map = this;
 	        },
 	    });
 	}
 
+	function updateModels(mo) {
+	    mo.building && mo.building.updateBound(mo);
+	    Array.from(mo._overlays)
+	        .filter(it => it.isHTMLOverlay)
+	        .map(it => ({
+	            overlay: it,
+	            position: mo.locationToViewport(it.location),
+	        }))
+	        .sort((a, b) => b.position.distance - a.position.distance)
+	        .forEach((it, index) => {
+	            it.overlay.render({
+	                x: it.position.x,
+	                y: it.position.y,
+	                zIndex: index + 10,
+	            });
+	        });
+	}
+
+	function renderMixin(XMap) {
+	    Object.assign(XMap.prototype, {
+	        render() {
+	            this.renderStarted = true;
+	            requestAnimationFrame(() => this.render());
+	            this.control.update();
+
+	            if (this.control.viewChanged) {
+	                this.control.viewChanged = false;
+	                this._camera.updateProjectionMatrix();
+	                this.updateProjectionMatrix = true;
+	                updateModels(this);
+	            } else if (this.updateProjectionMatrix) {
+	                this.updateProjectionMatrix = false;
+	                updateModels(this);
+	            }
+
+	            this.renderer.clear();
+	            this.renderer.render(this._scene, this._camera);
+	            this.renderer.clearDepth();
+	        },
+	    });
+	}
+
+	function styleInject(css, ref) {
+	  if ( ref === void 0 ) ref = {};
+	  var insertAt = ref.insertAt;
+
+	  if (!css || typeof document === 'undefined') { return; }
+
+	  var head = document.head || document.getElementsByTagName('head')[0];
+	  var style = document.createElement('style');
+	  style.type = 'text/css';
+
+	  if (insertAt === 'top') {
+	    if (head.firstChild) {
+	      head.insertBefore(style, head.firstChild);
+	    } else {
+	      head.appendChild(style);
+	    }
+	  } else {
+	    head.appendChild(style);
+	  }
+
+	  if (style.styleSheet) {
+	    style.styleSheet.cssText = css;
+	  } else {
+	    style.appendChild(document.createTextNode(css));
+	  }
+	}
+
+	var css = ".imap-controls, .imap-overlays {\r\n    position: absolute;\r\n    top: 0;\r\n    left: 0;\r\n    width: -webkit-fill-available;\r\n    height: -webkit-fill-available;\r\n    pointer-events: none;\r\n    overflow: hidden;\r\n}\r\n\r\n.imap-controls *, .imap-overlays * {\r\n    pointer-events: auto;\r\n}\r\n\r\n.imap-floor-control {\r\n    position: absolute;\r\n    right: 10px;\r\n    top: 10px;\r\n    z-index: 100;\r\n    background: white;\r\n    border: solid 1px #dfdfdf;\r\n    text-align: center;\r\n    border-radius: 3px;\r\n    font-size: 14px;\r\n    padding: 0;\r\n}\r\n\r\n.imap-floor-control li {\r\n    list-style: none;\r\n    line-height: 25px;\r\n    width: 25px;\r\n    height: 25px;\r\n    border-bottom: solid 1px #dfdfdf;\r\n}\r\n\r\n.imap-floor-control li:last-child {\r\n    border-bottom: none;\r\n}";
+	styleInject(css);
+
 	class XMap {
 	    constructor(el, options = {}) {
 	        this._init(el, options);
-	    }
-
-	    animate() {
-	        requestAnimationFrame(() => this.animate());
-	        this.control.update();
-	        if (this.control.viewChanged) {
-	            this.building && this.building.updateBound(this);
-	        }
-
-	        this.renderer.clear();
-	        this.renderer.render(this._scene, this._camera);
-	        this.renderer.clearDepth();
-	        this.control.viewChanged = false;
 	    }
 	}
 	initMixin(XMap);
@@ -49418,6 +49476,7 @@
 	overlayMixin(XMap);
 	loaderMixin(XMap);
 	viewMixin(XMap);
+	renderMixin(XMap);
 
 	class Location {
 	    constructor(floor, x, y, z = 0) {

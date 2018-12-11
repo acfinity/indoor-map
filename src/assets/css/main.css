@@ -1,26 +1,15 @@
-/* CSS */
-
 .imap-controls, .imap-overlays {
     position: absolute;
     top: 0;
     left: 0;
-    width: 100%;
-    height: 100%;
+    width: -webkit-fill-available;
+    height: -webkit-fill-available;
     pointer-events: none;
     overflow: hidden;
 }
 
 .imap-controls *, .imap-overlays * {
     pointer-events: auto;
-}
-
-.imap-overlays span {
-    position: absolute;
-    display: none;
-    padding: 7px;
-    background: white;
-    border: solid 1px #ccc;
-    max-width: 140px;
 }
 
 .imap-floor-control {

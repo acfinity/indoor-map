@@ -12,21 +12,23 @@ export function initMixin(XMap) {
     Object.assign(XMap.prototype, {
         _init(el, options) {
             this.options = options
-            this.wrapper = typeof el == 'string' ? document.querySelector(el) : el
-            this.wrapper.style.overflow = 'hidden'
+            this.$wrapper = typeof el == 'string' ? document.querySelector(el) : el
+            this.$wrapper.style.overflow = 'hidden'
 
             this._overlays = new Set()
 
             initView(this)
 
-            this.control = new OrbitControl(this._camera, this.mapWrapper)
-            this.floorControl = new FloorControl(this._camera, this.mapWrapper)
+            this.control = new OrbitControl(this._camera, this.$mapWrapper)
+            this.floorControl = new FloorControl(this._camera, this.$mapWrapper)
 
             initEvent(this)
             initLoaders(this)
 
             mapObejctMixins(this)
             overlayMixins(this)
+
+            window.map = this
         },
     })
 }

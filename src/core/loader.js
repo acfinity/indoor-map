@@ -5,7 +5,7 @@ export function loaderMixin(XMap) {
     Object.assign(XMap.prototype, {
         load(fileName) {
             this.mapLoader.load(fileName).then(building => {
-                this.floorControl.show(this.controlWrapper, building)
+                this.floorControl.show(this.$controlWrapper, building)
                 this.building = building
                 this.renderer.setClearColor('#ffffff')
                 this._scene.add(building.object3D)
@@ -15,7 +15,10 @@ export function loaderMixin(XMap) {
                 this._overlays.forEach(overlay => this._addOverlay(overlay))
 
                 this.setDefaultView()
-                this.animate()
+                if (!this.renderStarted) {
+                    this.renderStarted = true
+                    this.render()
+                }
                 this.renderer.domElement.style.opacity = 1
                 this.building.updateBound(this)
                 this.setViewMode(this.options.viewMode)

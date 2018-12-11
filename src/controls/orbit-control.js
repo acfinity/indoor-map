@@ -114,15 +114,6 @@ class OrbitControl {
     }
 
     update() {
-        if (
-            !this.viewChanged &&
-            Math.abs(this.thetaDelta) < EPS &&
-            Math.abs(this.phiDelta) < EPS &&
-            Math.abs(this.scale - 1) < EPS
-        ) {
-            return
-        }
-
         let position = this.camera.position
         let offset = position.clone().sub(this.center)
 

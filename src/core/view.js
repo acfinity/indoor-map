@@ -55,6 +55,7 @@ export function viewMixin(XMap) {
                     }
                 } else {
                     floor.localToWorld(worldPosition)
+                    let distance = worldPosition.distanceTo(this._camera.position)
                     worldPosition.project(this._camera)
                     screenPosition
                         .copy(worldPosition)
@@ -63,6 +64,7 @@ export function viewMixin(XMap) {
                     return {
                         x: screenPosition.x,
                         y: screenPosition.y,
+                        distance: distance,
                     }
                 }
             }
@@ -77,24 +79,24 @@ export function viewMixin(XMap) {
 }
 
 function initDom(mo) {
-    mo.mapWrapper = document.createElement('div')
-    mo.mapWrapper.style.overflow = 'hidden'
-    mo.mapWrapper.style.width = '100%'
-    mo.mapWrapper.style.height = '100%'
-    mo.wrapper.appendChild(mo.mapWrapper)
+    mo.$mapWrapper = document.createElement('div')
+    mo.$mapWrapper.style.overflow = 'hidden'
+    mo.$mapWrapper.style.width = '100%'
+    mo.$mapWrapper.style.height = '100%'
+    mo.$wrapper.appendChild(mo.$mapWrapper)
 
-    mo.overlayWrapper = document.createElement('div')
-    mo.overlayWrapper.className = 'imap-overlays'
-    mo.wrapper.appendChild(mo.overlayWrapper)
+    mo.$overlayWrapper = document.createElement('div')
+    mo.$overlayWrapper.className = 'imap-overlays'
+    mo.$wrapper.appendChild(mo.$overlayWrapper)
 
-    mo.controlWrapper = document.createElement('div')
-    mo.controlWrapper.className = 'imap-controls'
-    mo.wrapper.appendChild(mo.controlWrapper)
+    mo.$controlWrapper = document.createElement('div')
+    mo.$controlWrapper.className = 'imap-controls'
+    mo.$wrapper.appendChild(mo.$controlWrapper)
 }
 
 function initThree(mo) {
-    let width = mo.wrapper.clientWidth,
-        height = mo.wrapper.clientHeight
+    let width = mo.$wrapper.clientWidth,
+        height = mo.$wrapper.clientHeight
     mo._canvasScale = Math.round(height / Math.sin((PERSPECTIVE_FOV / 180) * Math.PI))
 
     mo._scene = new THREE.Scene()
@@ -119,11 +121,11 @@ function initThree(mo) {
     mo.renderer.autoClear = false
     mo.renderer.setClearColor('#ffffff')
     mo.renderer.setSize(width, height)
-    let canvasDiv = mo.renderer.domElement
-    mo.mapWrapper.appendChild(canvasDiv)
-    canvasDiv.style.width = '100%'
-    canvasDiv.style.height = '100%'
-    canvasDiv.style.opacity = 0
+    let $canvasDiv = mo.renderer.domElement
+    mo.$mapWrapper.appendChild($canvasDiv)
+    $canvasDiv.style.width = '100%'
+    $canvasDiv.style.height = '100%'
+    $canvasDiv.style.opacity = 0
 
     let hw = width / 2,
         hh = height / 2
@@ -135,8 +137,8 @@ export function initView(mo) {
     initThree(mo)
 
     function refreshSize() {
-        let width = mo.wrapper.clientWidth,
-            height = mo.wrapper.clientHeight
+        let width = mo.$wrapper.clientWidth,
+            height = mo.$wrapper.clientHeight
         mo._canvasScale = Math.round(height / Math.sin((PERSPECTIVE_FOV / 180) * Math.PI))
 
         mo._camera.aspect = width / height
@@ -146,6 +148,8 @@ export function initView(mo) {
         let hw = width / 2,
             hh = height / 2
         mo.viewportMatrix.set(hw, 0, 0, hw, 0, -hh, 0, hh)
+
+        mo.updateProjectionMatrix = true
     }
     addEvent(window, 'resize', () => refreshSize())
 }

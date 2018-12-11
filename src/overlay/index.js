@@ -1,9 +1,13 @@
 import Overlay from './overlay'
+import HTMLOverlay from './html-overlay'
 import Marker from './marker'
+import HTMLInfoWindow from './html-info-window'
 
 export default {
     Overlay,
+    HTMLOverlay,
     Marker,
+    HTMLInfoWindow,
 }
 
 export function overlayMixin(XMap) {
@@ -23,9 +27,14 @@ export function overlayMixin(XMap) {
 
         _addOverlay(overlay) {
             if (this.building) {
-                let floorObj = this.building.getFloor(overlay.floor).object3D
-                floorObj.add(overlay.object3D)
-                overlay.onAppend && overlay.onAppend(floorObj)
+                if (overlay.isHTMLOverlay) {
+                    this.$overlayWrapper.appendChild(overlay.$el)
+                    overlay.render(this.locationToViewport(overlay.location))
+                } else {
+                    let floorObj = this.building.getFloor(overlay.floor).object3D
+                    floorObj.add(overlay.object3D)
+                    overlay.onAppend && overlay.onAppend(floorObj)
+                }
             }
         },
 

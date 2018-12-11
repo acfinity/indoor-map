@@ -36,7 +36,7 @@ export const initEvent = (function() {
             return
         }
         let point = e.touches ? e.touches[0] : e
-        vector.set((point.pageX / mo.wrapper.clientWidth) * 2 - 1, -(point.pageY / mo.wrapper.clientHeight) * 2 + 1, 0.5)
+        vector.set((point.pageX / mo.$wrapper.clientWidth) * 2 - 1, -(point.pageY / mo.$wrapper.clientHeight) * 2 + 1, 0.5)
         raycaster.setFromCamera(vector, mo._camera)
         return raycaster.intersectObjects(
             [...mo._overlays]
