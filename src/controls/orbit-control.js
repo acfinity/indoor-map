@@ -53,7 +53,7 @@ class OrbitControl {
     pan(start, end) {
         let vector = this.viewToWorld(start).sub(this.viewToWorld(end))
         // let worldEnd = this.viewToWorld(end)
-        let offset = vector.length()
+        // let offset = vector.length()
         // if(offset>)
         // console.log(offset)
         this.camera.position.add(vector)

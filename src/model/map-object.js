@@ -12,6 +12,14 @@ export default MapObejct
 
 export const mapObejctMixins = map => {
     Object.defineProperties(MapObejct.prototype, {
+        map: {
+            enumerable: false,
+            configurable: true,
+            get: function reactiveGetter() {
+                return map
+            },
+        },
+
         mapStyle: {
             enumerable: false,
             configurable: true,

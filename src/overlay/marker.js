@@ -27,6 +27,7 @@ class Marker extends Overlay {
             map: this.texture,
             sizeAttenuation: false,
             transparent: true,
+            alphaTest: 0.1,
             depthTest: false,
         })
 

@@ -1,4 +1,4 @@
-import Map from './map'
+import Map from './core/map'
 // import { IndoorMap3d } from './3d'
 // import Detector from './3d/detector'
 import * as Constants from './constants'

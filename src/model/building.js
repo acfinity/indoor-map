@@ -66,7 +66,7 @@ class Building extends Base {
             let mesh = new THREE.Mesh(geometry, new THREE.MeshBasicMaterial(this.mapStyle.building))
             mesh.material.depthTest = false
             object.outline = mesh
-            object.add(mesh)
+            // object.add(mesh)
         }
 
         object.rotateOnAxis(new THREE.Vector3(1, 0, 0), -Math.PI / 2)
@@ -74,12 +74,12 @@ class Building extends Base {
         return object
     }
 
-    updateBound(camera) {
+    updateBound(map) {
         this.floors.forEach(floor => {
             if (this.showAll || floor.name === this.currentFloorNum) {
                 for (let i in floor.object3D.sprites) {
                     const sprite1 = floor.object3D.sprites[i]
-                    sprite1.updateBound(camera)
+                    sprite1.updateBound(map)
                     sprite1.visible = true
                     for (let j = 0; j < i; j++) {
                         const sprite2 = floor.object3D.sprites[j]
@@ -101,7 +101,7 @@ class Building extends Base {
         this.showAll = false
         if (this.object3D) {
             this.object3D.visible = true
-            this.object3D.outline && (this.object3D.outline.visible = false)
+            // this.object3D.outline && (this.object3D.outline.visible = false)
             this.object3D.children
                 .filter(obj => obj.name === 'floor')
                 .forEach(obj => {
@@ -116,7 +116,7 @@ class Building extends Base {
         this.showAll = showAll
         if (this.object3D) {
             this.object3D.visible = true
-            this.object3D.outline && (this.object3D.outline.visible = true)
+            // this.object3D.outline && (this.object3D.outline.visible = true)
             let offset = 4
             this.object3D.children.forEach((obj, index) => {
                 obj.visible = true

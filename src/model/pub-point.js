@@ -29,35 +29,11 @@ class PubPoint extends MapObject {
         sprite.position.copy(this.center).setZ(this.floor.info.height + 5)
         sprite.handler = this
         sprite.center.set(0.5, 0)
-        sprite.updateBound = camera => this.updateBound(camera)
         sprite.boundBox = new THREE.Box2()
         sprite.onViewModeChange = is3dMode => sprite.position.setZ(is3dMode ? this.floor.info.height + 5 : 3)
         this.object3D = sprite
         return sprite
     }
 }
-
-Object.assign(PubPoint.prototype, {
-    updateBound: (function() {
-        const mvPosition = new THREE.Vector3()
-        const vpPosition = new THREE.Vector4()
-
-        const viewportMatrix = new THREE.Matrix4()
-        return function(camera) {
-            let sprite = this.object3D
-            mvPosition.copy(sprite.position)
-            sprite.parent.localToWorld(mvPosition)
-
-            mvPosition.project(camera)
-
-            var a = 800 / 2
-            var b = 800 / 2
-            viewportMatrix.set(a, 0, 0, a /**/, 0, -b, 0, b /**/)
-            vpPosition.copy(mvPosition).applyMatrix4(viewportMatrix)
-
-            sprite.boundBox.setFromCenterAndSize(vpPosition, PUB_POINT_SIZE)
-        }
-    })(),
-})
 
 export default PubPoint

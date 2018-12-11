@@ -12,10 +12,11 @@ const TEMPLATE = `
 const context = compileTemplate(TEMPLATE)
 
 class FloorControl extends BaseControl {
-    constructor(renderer, camera) {
-        super(renderer)
+    constructor(camera, wrapper) {
+        super()
 
         this.camera = camera
+        this.wrapper = wrapper
     }
 
     show(wrapper, building) {
@@ -36,6 +37,7 @@ class FloorControl extends BaseControl {
         } else {
             this.building.showAllFloors()
         }
+        this.building.updateBound(this.camera)
     }
 }
 

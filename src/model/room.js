@@ -119,6 +119,7 @@ class Room extends Base {
         if (sprite) {
             let center = object.box.getCenter(new THREE.Vector2())
             sprite.position.set(center.x, center.y, this.floor.info.height + 5)
+            sprite.scale.set(sprite.width / this.canvasScale, sprite.height / this.canvasScale, 1)
             sprite.center.set(0.5, 0)
             sprite.onViewModeChange = is3dMode => sprite.position.setZ(is3dMode ? this.floor.info.height + 5 : 3)
             object.add(sprite)

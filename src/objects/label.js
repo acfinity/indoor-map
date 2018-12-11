@@ -21,6 +21,8 @@ function Label(text, options = {}) {
     let spriteMaterial = new SpriteMaterial({
         map: texture,
         sizeAttenuation: false,
+        transparent: true,
+        alphaTest: 0.1,
     })
 
     Sprite.call(this, spriteMaterial)
@@ -31,6 +33,66 @@ function Label(text, options = {}) {
 
     this.setText(text)
 }
+
+const updateBound = (function() {
+    const worldScale = new Vector3()
+    const mvPosition = new Vector3()
+    const vpPosition = new Vector4()
+
+    const alignedPosition = new Vector2()
+    const rotatedPosition = new Vector2()
+    const viewWorldMatrix = new Matrix4()
+
+    const vA = new Vector3()
+    const vB = new Vector3()
+    const vC = new Vector3()
+
+    function transformVertex(vertexPosition, mvPosition, center, scale, sin, cos) {
+        // compute position in camera space
+        alignedPosition
+            .subVectors(vertexPosition, center)
+            .addScalar(0.5)
+            .multiply(scale)
+        // to check if rotation is not zero
+        if (sin !== undefined) {
+            rotatedPosition.x = cos * alignedPosition.x - sin * alignedPosition.y
+            rotatedPosition.y = sin * alignedPosition.x + cos * alignedPosition.y
+        } else {
+            rotatedPosition.copy(alignedPosition)
+        }
+        vertexPosition.copy(mvPosition)
+        vertexPosition.x += rotatedPosition.x
+        vertexPosition.y += rotatedPosition.y
+    }
+
+    return function box(map) {
+        worldScale.set(this.width, this.height, 1)
+        viewWorldMatrix.getInverse(this.modelViewMatrix).premultiply(this.matrixWorld)
+        mvPosition.setFromMatrixPosition(this.modelViewMatrix)
+
+        mvPosition.applyMatrix4(viewWorldMatrix)
+        mvPosition.project(map._camera)
+
+        vpPosition.copy(mvPosition).applyMatrix4(map.viewportMatrix)
+
+        var rotation = this.material.rotation
+        var sin, cos
+        if (rotation !== 0) {
+            cos = Math.cos(rotation)
+            sin = Math.sin(rotation)
+        }
+
+        var center = this.center
+
+        transformVertex(vA.set(-0.5, -0.5, 0), vpPosition, center, worldScale, sin, cos)
+        transformVertex(vB.set(0.5, -0.5, 0), vpPosition, center, worldScale, sin, cos)
+        transformVertex(vC.set(0.5, 0.5, 0), vpPosition, center, worldScale, sin, cos)
+
+        this.boundBox.setFromPoints([vA, vB, vC])
+    }
+})()
+
+Object.assign(Sprite.prototype, { updateBound })
 
 Label.prototype = Object.assign(Object.create(Sprite.prototype), {
     constructor: Label,
@@ -61,75 +123,11 @@ Label.prototype = Object.assign(Object.create(Sprite.prototype), {
 
         this.texture.needsUpdate = true
 
-        this.scale.set(canvas.width / 2339, canvas.height / 2339, 1.0)
         this.originScale = this.scale.clone()
         this.width = canvas.width
         this.height = canvas.height
         return
     },
-    updateBound: (function() {
-        const worldScale = new Vector3()
-        const mvPosition = new Vector3()
-        const vpPosition = new Vector4()
-
-        const alignedPosition = new Vector2()
-        const rotatedPosition = new Vector2()
-        const viewWorldMatrix = new Matrix4()
-
-        const vA = new Vector3()
-        const vB = new Vector3()
-        const vC = new Vector3()
-
-        const viewportMatrix = new Matrix4()
-
-        function transformVertex(vertexPosition, mvPosition, center, scale, sin, cos) {
-            // compute position in camera space
-            alignedPosition
-                .subVectors(vertexPosition, center)
-                .addScalar(0.5)
-                .multiply(scale)
-            // to check if rotation is not zero
-            if (sin !== undefined) {
-                rotatedPosition.x = cos * alignedPosition.x - sin * alignedPosition.y
-                rotatedPosition.y = sin * alignedPosition.x + cos * alignedPosition.y
-            } else {
-                rotatedPosition.copy(alignedPosition)
-            }
-            vertexPosition.copy(mvPosition)
-            vertexPosition.x += rotatedPosition.x
-            vertexPosition.y += rotatedPosition.y
-        }
-
-        return function box(camera) {
-            worldScale.set(this.width, this.height, 1)
-            viewWorldMatrix.getInverse(this.modelViewMatrix).premultiply(this.matrixWorld)
-            mvPosition.setFromMatrixPosition(this.modelViewMatrix)
-
-            mvPosition.applyMatrix4(viewWorldMatrix)
-
-            mvPosition.project(camera)
-
-            var a = 800 / 2
-            var b = 800 / 2
-            viewportMatrix.set(a, 0, 0, a /**/, 0, -b, 0, b /**/)
-            vpPosition.copy(mvPosition).applyMatrix4(viewportMatrix)
-
-            var rotation = this.material.rotation
-            var sin, cos
-            if (rotation !== 0) {
-                cos = Math.cos(rotation)
-                sin = Math.sin(rotation)
-            }
-
-            var center = this.center
-
-            transformVertex(vA.set(-0.5, -0.5, 0), vpPosition, center, worldScale, sin, cos)
-            transformVertex(vB.set(0.5, -0.5, 0), vpPosition, center, worldScale, sin, cos)
-            transformVertex(vC.set(0.5, 0.5, 0), vpPosition, center, worldScale, sin, cos)
-
-            this.boundBox.setFromPoints([vA, vB, vC])
-        }
-    })(),
 })
 
 export default Label

@@ -49,7 +49,8 @@ class Floor extends Base {
             let geometry2d = new THREE.ShapeGeometry(shape)
             let material = new THREE.MeshPhongMaterial(this.mapStyle.floor)
             let mesh = new THREE.Mesh(geometry3d, material)
-            mesh.name = 'floor borad'
+            mesh.name = 'floor'
+            mesh.handler = this
             mesh.position.set(0, 0, -10)
             mesh.onViewModeChange = is3dMode => {
                 mesh.geometry = is3dMode ? geometry3d : geometry2d

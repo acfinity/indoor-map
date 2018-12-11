@@ -129,7 +129,7 @@ Object.assign( EventDispatcher.prototype, {
 
 		var listeners = this._listeners;
 
-		return listeners[ type ] !== undefined && listeners[ type ].indexOf( listener ) !== - 1;
+		return listeners[ type ] !== undefined && ( ! listener || listeners[ type ].indexOf( listener ) !== - 1 );
 
 	},
 

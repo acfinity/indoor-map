@@ -129,7 +129,7 @@ Object.assign( EventDispatcher.prototype, {
 
 		var listeners = this._listeners;
 
-		return listeners[ type ] !== undefined && listeners[ type ].indexOf( listener ) !== - 1;
+		return listeners[ type ] !== undefined && ( ! listener || listeners[ type ].indexOf( listener ) !== - 1 );
 
 	},
 
@@ -47669,6 +47669,659 @@ var THREE$1 = /*#__PURE__*/Object.freeze({
 	LensFlare: LensFlare
 });
 
+function eventMixin(Class) {
+    const eventMap = new Map();
+    Object.assign(Class.prototype, {
+        on(eventType, fn) {
+            let thisMap = eventMap.get(this);
+            if (!thisMap) {
+                thisMap = new Map();
+                eventMap.set(this, thisMap);
+            }
+            let listener = event => fn(event.message);
+            thisMap.set(fn, listener);
+            this.addEventListener(eventType, listener);
+        },
+        off(eventType, fn) {
+            let thisMap = eventMap.get(this);
+            if (thisMap) {
+                let listener = thisMap.get(fn);
+                if (listener) {
+                    thisMap.delete(fn);
+                    this.removeEventListener(eventType, listener);
+                }
+            }
+        },
+    });
+}
+
+const initEvent = (function() {
+    const raycaster = new Raycaster();
+    const mouse = new Vector2();
+    const vector = new Vector3(mouse.x, mouse.y, 0.5);
+    // let preHoveredEntity = undefined
+    const intersectObjects = function(eventType, mo, e) {
+        if ([...mo._overlays, mo].filter(it => it.hasEventListener(eventType)).length === 0) {
+            return
+        }
+        let point = e.touches ? e.touches[0] : e;
+        vector.set((point.pageX / mo.wrapper.clientWidth) * 2 - 1, -(point.pageY / mo.wrapper.clientHeight) * 2 + 1, 0.5);
+        raycaster.setFromCamera(vector, mo._camera);
+        return raycaster.intersectObjects(
+            [...mo._overlays]
+                .filter(it => it.hasEventListener(eventType))
+                .concat(mo.building.floors)
+                .map(it => it.object3D)
+                .filter(it => it.visible),
+            true
+        )
+    };
+    return function(mo) {
+        mo.control.onClickListener = e => {
+            let intersects = intersectObjects('click', mo, e);
+            if (!intersects || intersects.length === 0) {
+                return
+            }
+            let overlay;
+            if (intersects[0].object.handler && intersects[0].object.handler.isOverlay) {
+                overlay = intersects[0].object.handler;
+                intersects[0].object.handler.dispatchEvent({ type: 'click', message: { overlay, domEvent: e } });
+            }
+            if (mo.hasEventListener('click')) {
+                let floor = intersects.filter(it => it.object.name === 'floor')[0];
+                if (floor) {
+                    mo.dispatchEvent({
+                        type: 'click',
+                        message: {
+                            x: Math.round(floor.point.x),
+                            y: -Math.round(floor.point.z),
+                            floor: floor.object.handler.name,
+                            overlay,
+                            domEvent: e,
+                        },
+                    });
+                }
+            }
+        };
+        mo.control.onHoverListener = e => {
+            let intersects = intersectObjects('hover', mo, e);
+            if (!intersects || intersects.length === 0) {
+                return
+            }
+            // let hoveredEntity = null
+            // if (intersects[0].object.handler && intersects[0].object.handler.isOverlay) {
+            //     intersects[0].object.handler.dispatchEvent('click', { domEvent: e })
+            //     // overlay = intersects[0].object.handler
+            // }
+            // if (hoveredEntity && hoveredEntity.object === preHoveredEntity) {
+            //     return
+            // } else {
+            //     if (this._hoveredEntity != null) {
+            //         this._hoveredEntity.handler.onHover && preHoveredEntity.handler.onHover(false)
+            //     }
+            //     if (hoveredEntity != null) {
+            //         this._hoveredEntity = hoveredEntity.object
+            //         this._hoveredEntity.handler.onHover && preHoveredEntity.handler.onHover(true)
+            //     } else {
+            //         this._hoveredEntity = null
+            //     }
+            // }
+        };
+    }
+})();
+
+class Overlay {
+    constructor() {}
+
+    show() {
+        this.visible = true;
+    }
+
+    hide() {
+        this.visible = false;
+    }
+
+    removeFromParent() {
+        if (this.object3D && this.object3D.parent) {
+            this.object3D.parent.remove(this.object3D);
+        }
+    }
+
+    setLocation(location /*, animate*/) {
+        this.currentLocation = location;
+        this.object3D.position.copy(location.localPosition);
+    }
+}
+
+Object.assign(Overlay.prototype, THREE$1.EventDispatcher.prototype);
+eventMixin(Overlay);
+
+Object.defineProperties(Overlay.prototype, {
+    visible: {
+        enumerable: true,
+        configurable: false,
+        get: function() {
+            return this.object3D && this.object3D.visible
+        },
+        set: function(value) {
+            this.object3D && (this.object3D.visible = value);
+        },
+    },
+
+    onHover: {
+        enumerable: false,
+        configurable: false,
+        get: function() {
+            return this.options && this.options.onHover
+        },
+    },
+
+    onClick: {
+        enumerable: false,
+        configurable: false,
+        get: function() {
+            return this.options && this.options.onClick
+        },
+    },
+
+    onAppend: {
+        enumerable: false,
+        configurable: false,
+        get: function() {
+            return this.options && this.options.onAppend
+        },
+    },
+
+    isOverlay: {
+        value: true,
+        writable: false,
+    },
+});
+
+const PUB_POINT_SIZE = new THREE$1.Vector2(20, 20);
+
+class Marker extends Overlay {
+    constructor(location, options = {}) {
+        super();
+
+        this.options = options;
+        this.currentLocation = location;
+        this.location = location;
+        this.floor = location.floor;
+        this.position = location.localPosition;
+
+        this.makeObject3D();
+    }
+
+    makeObject3D() {
+        let { icon } = this.options;
+
+        this.texture = new THREE$1.TextureLoader().load(icon, t => {
+            t.needsUpdate = true;
+        });
+        this.texture.minFilter = THREE$1.LinearFilter;
+        this.material = new THREE$1.SpriteMaterial({
+            map: this.texture,
+            sizeAttenuation: false,
+            transparent: true,
+            alphaTest: 0.1,
+            depthTest: false,
+        });
+
+        let sprite = new THREE$1.Sprite(this.material);
+        let size = this.options.size || PUB_POINT_SIZE;
+        let align = this.options.align || 'CENTER';
+        sprite.width = size.width;
+        sprite.height = size.height;
+        sprite.scale.set(size.width / this.canvasScale, size.width / this.canvasScale, 1);
+        sprite.position.copy(this.position);
+        sprite.handler = this;
+        sprite.type = 'Marker';
+        if (align === 'CENTER') {
+            sprite.center.set(0.5, 0.5);
+        } else if (align === 'BOTTOM') {
+            sprite.center.set(0.5, 0);
+        }
+        sprite.renderOrder = 10;
+        sprite.onViewModeChange = is3dMode => sprite.position.setZ(is3dMode ? this.currentLocation.z : 3);
+        this.object3D = sprite;
+        return sprite
+    }
+}
+
+var Overlays = {
+    Overlay,
+    Marker,
+};
+
+function overlayMixin(XMap) {
+    Object.assign(XMap.prototype, {
+        addOverlay(overlay) {
+            this._overlays.add(overlay);
+            this._addOverlay(overlay);
+        },
+
+        removeOverlay(...overlays) {
+            this._removeOverlays(overlays);
+        },
+
+        clearOverlays() {
+            this._removeOverlays(this._overlays);
+        },
+
+        _addOverlay(overlay) {
+            if (this.building) {
+                let floorObj = this.building.getFloor(overlay.floor).object3D;
+                floorObj.add(overlay.object3D);
+                overlay.onAppend && overlay.onAppend(floorObj);
+            }
+        },
+
+        _removeOverlays(overlays) {
+            overlays.forEach(overlay => {
+                overlay.removeFromParent();
+                this._overlays.delete(overlay);
+            });
+        },
+    });
+}
+
+const overlayMixins = map => {
+    Object.defineProperties(Overlay.prototype, {
+        canvasScale: {
+            enumerable: false,
+            configurable: false,
+            get: function reactiveGetter() {
+                return map._canvasScale
+            },
+        },
+    });
+};
+
+const addEvent = (el, type, fn, capture) => {
+    el.addEventListener(type, fn, capture);
+};
+
+const removeEvent = (el, type, fn, capture) => {
+    el.removeEventListener(type, fn, capture);
+};
+
+const STATE = {
+    NONE: -1,
+    ROTATE: 0,
+    ZOOM: 1,
+    PAN: 2,
+    CLICK: 3,
+    TOUCH_ROTATE: 5,
+    TOUCH_ZOOM_PAN: 6,
+};
+const userRotateSpeed = 2.0;
+const autoRotateSpeed = 1.0;
+const autoRotationAngle = ((2 * Math.PI) / 60 / 60) * autoRotateSpeed;
+const EPS = 1e-7;
+const PIXELS_PER_ROUND = 1800;
+const SCALE_STEP = 1.05;
+const TOUCH_SCALE_STEP = 1.03;
+
+class OrbitControl {
+    constructor(camera, wrapper) {
+        this.camera = camera;
+        this.wrapper = wrapper;
+
+        this.minPolarAngle = 0; // radians
+        this.maxPolarAngle = Math.PI / 2; // radians
+
+        this.minDistance = 0;
+        this.maxDistance = Infinity;
+
+        this.enabled = true;
+        this.scrollWheelZoomEnabled = true;
+        this.viewChanged = true;
+
+        this.onClickListener = null;
+
+        this.onHoverListener = null;
+        this.is3dMode = true;
+
+        this._initListeners();
+        this._initVars();
+    }
+
+    destroy() {
+        this._initListeners(true);
+    }
+
+    reset() {
+        this._initVars();
+    }
+
+    pan(start, end) {
+        let vector = this.viewToWorld(start).sub(this.viewToWorld(end));
+        // let worldEnd = this.viewToWorld(end)
+        // let offset = vector.length()
+        // if(offset>)
+        // console.log(offset)
+        this.camera.position.add(vector);
+        this.center.add(vector);
+
+        this.viewChanged = true;
+    }
+
+    rotateLeft(angle = autoRotationAngle) {
+        this.thetaDelta -= angle;
+    }
+
+    rotateRight(angle = autoRotationAngle) {
+        this.thetaDelta += angle;
+    }
+
+    rotateUp(angle = autoRotationAngle) {
+        this.phiDelta -= angle;
+    }
+
+    rotateDown(angle = autoRotationAngle) {
+        this.phiDelta += angle;
+    }
+
+    zoomIn(scale = 1.25) {
+        this.scale *= scale;
+        this.currentScale *= scale;
+    }
+
+    zoomOut(scale = 0.8) {
+        this.scale *= scale;
+        this.currentScale *= scale;
+    }
+
+    changeViewMode(is3dMode) {
+        if (this.is3dMode === is3dMode) {
+            return
+        }
+        let count = 10;
+        this.is3dMode = is3dMode;
+        if (is3dMode) {
+            let temp = setInterval(() => {
+                this.phiDelta = this.phi / 10;
+                count--;
+                if (!count) {
+                    clearInterval(temp);
+                }
+            }, 1000 / 60);
+        } else {
+            let temp = setInterval(() => {
+                this.phiDelta = -this.phi / 10;
+                count--;
+                if (!count) {
+                    clearInterval(temp);
+                }
+            }, 1000 / 60);
+        }
+    }
+
+    update() {
+        if (
+            !this.viewChanged &&
+            Math.abs(this.thetaDelta) < EPS &&
+            Math.abs(this.phiDelta) < EPS &&
+            Math.abs(this.scale - 1) < EPS
+        ) {
+            return
+        }
+
+        let position = this.camera.position;
+        let offset = position.clone().sub(this.center);
+
+        // angle from z-axis around y-axis
+        let theta = Math.atan2(offset.x, offset.z);
+        // angle from y-axis
+
+        let phi = Math.atan2(Math.sqrt(offset.x * offset.x + offset.z * offset.z), offset.y);
+
+        if (this.autoRotate) {
+            this.rotateLeft(autoRotationAngle);
+        }
+
+        theta += this.thetaDelta;
+        phi += this.phiDelta;
+
+        // restrict phi to be between desired limits
+        phi = Math.max(this.minPolarAngle, Math.min(this.maxPolarAngle, phi));
+
+        // restrict phi to be betwee EPS and PI-EPS
+        phi = this.phi = Math.max(EPS, Math.min(Math.PI * 0.37 - EPS, phi));
+        if (this.is3dMode) {
+            this.phi = phi;
+        }
+
+        let radius = offset.length() / this.scale;
+
+        // restrict radius to be between desired limits
+        radius = Math.max(this.minDistance, Math.min(this.maxDistance, radius));
+
+        offset.x = radius * Math.sin(phi) * Math.sin(theta);
+        offset.y = radius * Math.cos(phi);
+        offset.z = radius * Math.sin(phi) * Math.cos(theta);
+
+        position.copy(this.center).add(offset);
+        this.camera.lookAt(this.center);
+        this.thetaDelta = 0;
+        this.phiDelta = 0;
+        this.scale = 1;
+
+        if (this.lastPosition.distanceTo(this.camera.position) > 0) {
+            this.lastPosition.copy(this.camera.position);
+            this.viewChanged = true;
+        }
+    }
+
+    _initVars() {
+        this.startPosition = new THREE$1.Vector2();
+        this.endPosition = new THREE$1.Vector2();
+        this.deltaVector = new THREE$1.Vector2();
+        this.touchStartPoints = [new THREE$1.Vector2(), new THREE$1.Vector2(), new THREE$1.Vector2()];
+        this.touchEndPoints = [new THREE$1.Vector2(), new THREE$1.Vector2(), new THREE$1.Vector2()];
+
+        this.cameraInverseMatrix = new THREE$1.Matrix4();
+
+        this.phiDelta = 0;
+        this.thetaDelta = 0;
+        this.scale = 1;
+        this.currentScale = 1;
+
+        this.state = STATE.NONE;
+
+        this.lastPosition = new THREE$1.Vector3();
+
+        this.center = new THREE$1.Vector3();
+    }
+
+    _initListeners(remove) {
+        let eventType = remove ? removeEvent : addEvent;
+        eventType(this.wrapper, 'touchstart', this, {
+            passive: false,
+        });
+        eventType(this.wrapper, 'mousedown', this, {
+            passive: false,
+        });
+        eventType(window, 'touchend', this, {
+            passive: false,
+        });
+        eventType(window, 'mouseup', this, {
+            passive: false,
+        });
+        eventType(window, 'touchmove', this, {
+            passive: false,
+        });
+        eventType(window, 'mousemove', this);
+        eventType(this.wrapper, 'mousewheel', this);
+        eventType(window, 'contextmenu', this, false);
+    }
+
+    handleEvent(e) {
+        switch (e.type) {
+            case 'touchstart':
+            case 'mousedown':
+                if (e.touches && e.touches.length > 1) {
+                    this._touchStart(e);
+                } else {
+                    this._start(e);
+                }
+                break
+            case 'touchmove':
+            case 'mousemove':
+                if (e.touches && e.touches.length > 1 && (this.state === STATE.ZOOM || this.state === STATE.ROTATE)) {
+                    this._touchMove(e);
+                } else {
+                    this._move(e);
+                }
+                break
+            case 'mouseout':
+                this.state = STATE.NONE;
+                break
+            case 'touchend':
+            case 'mouseup':
+                this._end(e);
+                break
+            case 'mousewheel':
+                this._wheel(e);
+                break
+            case 'contextmenu':
+                e.preventDefault();
+                break
+        }
+        e.preventDefault();
+    }
+
+    _start(e) {
+        if (!this.enabled) return
+
+        // e.preventDefault()
+
+        if (this.state === STATE.NONE) {
+            if (e.button === 0 || (e.touches && e.touches.length == 1)) {
+                this.state = STATE.CLICK;
+            } else if (e.button === 1) {
+                this.state = STATE.ZOOM;
+            } else if (e.button === 2) {
+                this.state = STATE.ROTATE;
+            }
+        }
+
+        const point = e.touches ? e.touches[0] : e;
+
+        this.startPosition.set(point.pageX, point.pageY);
+    }
+
+    _move(e) {
+        if (!this.enabled) return
+        if (this.state !== STATE.NONE) {
+            // e.preventDefault()
+            const point = e.touches ? e.touches[0] : e;
+
+            this.endPosition.set(point.pageX, point.pageY);
+            this.deltaVector.subVectors(this.endPosition, this.startPosition);
+            if (this.deltaVector.length() == 0) {
+                return
+            }
+            if (this.state === STATE.ROTATE) {
+                this.rotateLeft(((2 * Math.PI * this.deltaVector.x) / PIXELS_PER_ROUND) * userRotateSpeed);
+                this.is3dMode &&
+                    this.rotateUp(((2 * Math.PI * this.deltaVector.y) / PIXELS_PER_ROUND) * userRotateSpeed);
+            } else if (this.state === STATE.ZOOM) {
+                if (this.deltaVector.y > 0) {
+                    this.zoomIn();
+                } else {
+                    this.zoomOut();
+                }
+            } else if (this.state === STATE.CLICK || this.state === STATE.PAN) {
+                this.state = STATE.PAN;
+                this.pan(this.startPosition, this.endPosition);
+            }
+            this.startPosition.copy(this.endPosition);
+        } else if (this.onHoverListener && this.wrapper.contains(e.target)) {
+            this.onHoverListener(e);
+        }
+    }
+
+    _end(e) {
+        if (!this.enabled) return
+        if (this.state === STATE.NONE) return
+        let state = this.state;
+        this.state = STATE.NONE;
+        if (state === STATE.CLICK && this.onClickListener) {
+            this.onClickListener(e);
+        }
+    }
+
+    _wheel(e) {
+        if (!this.enabled) return
+        if (!this.scrollWheelZoomEnabled) return
+
+        let delta = e.wheelDelta ? e.wheelDelta / 120 : -e.detail / 3;
+        let scale = Math.pow(SCALE_STEP, delta);
+        this.scale *= scale;
+        this.currentScale *= scale;
+    }
+
+    _touchStart(e) {
+        if (!this.enabled) return
+        ;[...e.touches]
+            .filter((_, i) => i < 3)
+            .map(({ pageX, pageY }, index) => this.touchStartPoints[index].set(pageX, pageY));
+        if (e.touches.length === 2) {
+            this.state = STATE.ZOOM;
+            this.span.innerHTML = '_touchStart';
+        } else {
+            this.state = STATE.ROTATE;
+        }
+    }
+
+    _touchMove(e) {
+        if (!this.enabled) return
+        if (this.state === STATE.NONE) return
+        ;[...e.touches]
+            .filter((_, i) => i < 3)
+            .map(({ pageX, pageY }, index) => this.touchEndPoints[index].set(pageX, pageY));
+        this.span.innerHTML = '_touchMove';
+        if (this.state === STATE.ZOOM) {
+            let dStart = this.touchStartPoints[1].distanceTo(this.touchStartPoints[0]);
+            let dEnd = this.touchEndPoints[1].distanceTo(this.touchEndPoints[0]);
+            if (Math.abs(dStart - dEnd) < 5) {
+                return
+            } else if (dStart < dEnd) {
+                this.zoomIn(TOUCH_SCALE_STEP);
+            } else {
+                this.zoomOut(1 / TOUCH_SCALE_STEP);
+            }
+            // } else if (this.state === STATE.ROTATE) {
+        }
+        this.touchEndPoints.forEach((p, i) => this.touchStartPoints[i].copy(p));
+    }
+}
+
+Object.assign(OrbitControl.prototype, Object.create(THREE$1.EventDispatcher.prototype));
+Object.assign(OrbitControl.prototype, {
+    viewToWorld: (function() {
+        const raycaster = new THREE$1.Raycaster();
+        const vector = new THREE$1.Vector3(0, 0, 0.5);
+        const plane = new THREE$1.Plane(new THREE$1.Vector3(0, 1, 0), 0);
+
+        return function(point) {
+            vector.x = (point.x / this.wrapper.clientWidth) * 2 - 1;
+            vector.y = -(point.y / this.wrapper.clientHeight) * 2 + 1;
+            raycaster.setFromCamera(vector, this.camera);
+            let result = new THREE$1.Vector3();
+            raycaster.ray.intersectPlane(plane, result);
+            return result
+        }
+    })(),
+});
+
+class BaseControl {
+    constructor() {
+    }
+}
+
 const parsePoints = array => {
     var points = [];
     for (var i = 0; i < array.length; i += 2) {
@@ -47722,6 +48375,75 @@ const appendHTML = function(element, html) {
     fragment = null;
 };
 
+function styleInject(css, ref) {
+  if ( ref === void 0 ) ref = {};
+  var insertAt = ref.insertAt;
+
+  if (!css || typeof document === 'undefined') { return; }
+
+  var head = document.head || document.getElementsByTagName('head')[0];
+  var style = document.createElement('style');
+  style.type = 'text/css';
+
+  if (insertAt === 'top') {
+    if (head.firstChild) {
+      head.insertBefore(style, head.firstChild);
+    } else {
+      head.appendChild(style);
+    }
+  } else {
+    head.appendChild(style);
+  }
+
+  if (style.styleSheet) {
+    style.styleSheet.cssText = css;
+  } else {
+    style.appendChild(document.createTextNode(css));
+  }
+}
+
+var css = "/* CSS */\r\n\r\n.imap-controls, .imap-overlays {\r\n    position: absolute;\r\n    top: 0;\r\n    left: 0;\r\n    width: 100%;\r\n    height: 100%;\r\n    pointer-events: none;\r\n    overflow: hidden;\r\n}\r\n\r\n.imap-controls *, .imap-overlays * {\r\n    pointer-events: auto;\r\n}\r\n\r\n.imap-overlays span {\r\n    position: absolute;\r\n    display: none;\r\n    padding: 7px;\r\n    background: white;\r\n    border: solid 1px #ccc;\r\n    max-width: 140px;\r\n}\r\n\r\n.imap-floor-control {\r\n    position: absolute;\r\n    right: 10px;\r\n    top: 10px;\r\n    z-index: 100;\r\n    background: white;\r\n    border: solid 1px #dfdfdf;\r\n    text-align: center;\r\n    border-radius: 3px;\r\n    font-size: 14px;\r\n    padding: 0;\r\n}\r\n\r\n.imap-floor-control li {\r\n    list-style: none;\r\n    line-height: 25px;\r\n    width: 25px;\r\n    height: 25px;\r\n    border-bottom: solid 1px #dfdfdf;\r\n}\r\n\r\n.imap-floor-control li:last-child {\r\n    border-bottom: none;\r\n}";
+styleInject(css);
+
+const TEMPLATE = `
+<ul class='imap-floor-control'>
+  <% for(let i=0; i < data.length; i++) { %>
+    <li><%= data[i] %></li>
+  <% } %>
+</ul>
+`;
+const context$1 = compileTemplate(TEMPLATE);
+
+class FloorControl extends BaseControl {
+    constructor(camera, wrapper) {
+        super();
+
+        this.camera = camera;
+        this.wrapper = wrapper;
+    }
+
+    show(wrapper, building) {
+        this.building = building;
+
+        const floors = new Map(building.floors.map(f => [f.info.name, f]));
+        if (floors.size < 2) {
+            return
+        }
+        appendHTML(wrapper, context$1(['All', ...building.floors.map(f => f.name).reverse()]));
+        let elements = [...wrapper.getElementsByTagName('li')];
+        elements.forEach(ele => ele.addEventListener('click', () => this.showFloor(floors.get(ele.innerHTML))));
+    }
+
+    showFloor(floor) {
+        if (floor) {
+            this.building.showFloor(floor.name);
+        } else {
+            this.building.showAllFloors();
+        }
+        this.building.updateBound(this.camera);
+    }
+}
+
 class MapObejct {
     constructor() {}
 }
@@ -47732,6 +48454,14 @@ Object.assign(MapObejct.prototype, {
 
 const mapObejctMixins = map => {
     Object.defineProperties(MapObejct.prototype, {
+        map: {
+            enumerable: false,
+            configurable: true,
+            get: function reactiveGetter() {
+                return map
+            },
+        },
+
         mapStyle: {
             enumerable: false,
             configurable: true,
@@ -47750,6 +48480,168 @@ const mapObejctMixins = map => {
     });
 };
 
+const ViewMode = {
+    MODE_3D: '3d',
+    MODE_2D: '2d',
+};
+
+const Scale = {
+    Max: 1,
+};
+
+var Constants = /*#__PURE__*/Object.freeze({
+	ViewMode: ViewMode,
+	Scale: Scale
+});
+
+const PERSPECTIVE_FOV = 20;
+
+function changeViewMode(mo, is3dMode) {
+    mo.control.changeViewMode(is3dMode);
+    function changeMode(object) {
+        if (object.onViewModeChange) object.onViewModeChange(is3dMode);
+        if (object.children && object.children.length > 0) {
+            object.children.forEach(obj => changeMode(obj));
+        }
+    }
+    changeMode(mo.building.object3D);
+}
+
+function viewMixin(XMap) {
+    Object.assign(XMap.prototype, {
+        setDefaultView() {
+            let camAngle = Math.PI / 2;
+            let camDir = [Math.cos(camAngle), Math.sin(camAngle)];
+            let camLen = 5000;
+            let tiltAngle = (75.0 * Math.PI) / 180.0;
+            this._camera.position.set(-camDir[1] * camLen, Math.sin(tiltAngle) * camLen, camDir[0] * camLen);
+            this._camera.lookAt(this._scene.position);
+
+            this.control.reset();
+            this.control.viewChanged = true;
+            return this
+        },
+
+        setViewMode(mode) {
+            if ((mode !== ViewMode.MODE_2D && mode !== ViewMode.MODE_3D) || mode === this._currentViewMode) {
+                return
+            }
+            this._currentViewMode = mode;
+            changeViewMode(this, mode === ViewMode.MODE_3D);
+        },
+
+        locationToViewport: (function() {
+            const worldPosition = new THREE$1.Vector3();
+            const screenPosition = new THREE$1.Vector4();
+            return function parseLocation(location) {
+                worldPosition.copy(location);
+                let floor = this.building.getFloor(location.floor);
+                if (!floor) {
+                    throw new Error('invalid floor')
+                }
+                floor = floor.object3D;
+                if (!floor.visible) {
+                    return {
+                        x: -Infinity,
+                        y: -Infinity,
+                    }
+                } else {
+                    floor.localToWorld(worldPosition);
+                    worldPosition.project(this._camera);
+                    screenPosition
+                        .copy(worldPosition)
+                        .applyMatrix4(this.viewportMatrix)
+                        .round();
+                    return {
+                        x: screenPosition.x,
+                        y: screenPosition.y,
+                    }
+                }
+            }
+        })(),
+    });
+    Object.defineProperties(XMap.prototype, {
+        viewportMatrix: {
+            writable: false,
+            value: new THREE$1.Matrix4(),
+        },
+    });
+}
+
+function initDom(mo) {
+    mo.mapWrapper = document.createElement('div');
+    mo.mapWrapper.style.overflow = 'hidden';
+    mo.mapWrapper.style.width = '100%';
+    mo.mapWrapper.style.height = '100%';
+    mo.wrapper.appendChild(mo.mapWrapper);
+
+    mo.overlayWrapper = document.createElement('div');
+    mo.overlayWrapper.className = 'imap-overlays';
+    mo.wrapper.appendChild(mo.overlayWrapper);
+
+    mo.controlWrapper = document.createElement('div');
+    mo.controlWrapper.className = 'imap-controls';
+    mo.wrapper.appendChild(mo.controlWrapper);
+}
+
+function initThree(mo) {
+    let width = mo.wrapper.clientWidth,
+        height = mo.wrapper.clientHeight;
+    mo._canvasScale = Math.round(height / Math.sin((PERSPECTIVE_FOV / 180) * Math.PI));
+
+    mo._scene = new THREE$1.Scene();
+    mo._camera = new THREE$1.PerspectiveCamera(PERSPECTIVE_FOV, width / height, 140, 100000);
+
+    //set up the lights
+    let light = new THREE$1.AmbientLight(0x747474);
+    mo._scene.add(light);
+
+    light = new THREE$1.DirectionalLight(0xadadad, 1.2);
+    light.position.set(4000, 4000, 4000).normalize();
+    light.target.position.set(0, 0, 0);
+    mo._scene.add(light);
+
+    light = new THREE$1.DirectionalLight(0x333333);
+    light.position.set(-4000, 2000, -4000).normalize();
+    mo._scene.add(light);
+
+    mo.renderer = new THREE$1.WebGLRenderer({
+        antialias: true,
+    });
+    mo.renderer.autoClear = false;
+    mo.renderer.setClearColor('#ffffff');
+    mo.renderer.setSize(width, height);
+    let canvasDiv = mo.renderer.domElement;
+    mo.mapWrapper.appendChild(canvasDiv);
+    canvasDiv.style.width = '100%';
+    canvasDiv.style.height = '100%';
+    canvasDiv.style.opacity = 0;
+
+    let hw = width / 2,
+        hh = height / 2;
+    mo.viewportMatrix.set(hw, 0, 0, hw, 0, -hh, 0, hh);
+}
+
+function initView(mo) {
+    initDom(mo);
+    initThree(mo);
+
+    function refreshSize() {
+        let width = mo.wrapper.clientWidth,
+            height = mo.wrapper.clientHeight;
+        mo._canvasScale = Math.round(height / Math.sin((PERSPECTIVE_FOV / 180) * Math.PI));
+
+        mo._camera.aspect = width / height;
+        mo._camera.updateProjectionMatrix();
+
+        mo.renderer.setSize(width, height);
+        let hw = width / 2,
+            hh = height / 2;
+        mo.viewportMatrix.set(hw, 0, 0, hw, 0, -hh, 0, hh);
+    }
+    addEvent(window, 'resize', () => refreshSize());
+}
+
 function Label(text, options = {}) {
     this.options = options;
 
@@ -47761,6 +48653,8 @@ function Label(text, options = {}) {
     let spriteMaterial = new SpriteMaterial({
         map: texture,
         sizeAttenuation: false,
+        transparent: true,
+        alphaTest: 0.1,
     });
 
     Sprite.call(this, spriteMaterial);
@@ -47772,13 +48666,73 @@ function Label(text, options = {}) {
     this.setText(text);
 }
 
+const updateBound = (function() {
+    const worldScale = new Vector3();
+    const mvPosition = new Vector3();
+    const vpPosition = new Vector4();
+
+    const alignedPosition = new Vector2();
+    const rotatedPosition = new Vector2();
+    const viewWorldMatrix = new Matrix4();
+
+    const vA = new Vector3();
+    const vB = new Vector3();
+    const vC = new Vector3();
+
+    function transformVertex(vertexPosition, mvPosition, center, scale, sin, cos) {
+        // compute position in camera space
+        alignedPosition
+            .subVectors(vertexPosition, center)
+            .addScalar(0.5)
+            .multiply(scale);
+        // to check if rotation is not zero
+        if (sin !== undefined) {
+            rotatedPosition.x = cos * alignedPosition.x - sin * alignedPosition.y;
+            rotatedPosition.y = sin * alignedPosition.x + cos * alignedPosition.y;
+        } else {
+            rotatedPosition.copy(alignedPosition);
+        }
+        vertexPosition.copy(mvPosition);
+        vertexPosition.x += rotatedPosition.x;
+        vertexPosition.y += rotatedPosition.y;
+    }
+
+    return function box(map) {
+        worldScale.set(this.width, this.height, 1);
+        viewWorldMatrix.getInverse(this.modelViewMatrix).premultiply(this.matrixWorld);
+        mvPosition.setFromMatrixPosition(this.modelViewMatrix);
+
+        mvPosition.applyMatrix4(viewWorldMatrix);
+        mvPosition.project(map._camera);
+
+        vpPosition.copy(mvPosition).applyMatrix4(map.viewportMatrix);
+
+        var rotation = this.material.rotation;
+        var sin, cos;
+        if (rotation !== 0) {
+            cos = Math.cos(rotation);
+            sin = Math.sin(rotation);
+        }
+
+        var center = this.center;
+
+        transformVertex(vA.set(-0.5, -0.5, 0), vpPosition, center, worldScale, sin, cos);
+        transformVertex(vB.set(0.5, -0.5, 0), vpPosition, center, worldScale, sin, cos);
+        transformVertex(vC.set(0.5, 0.5, 0), vpPosition, center, worldScale, sin, cos);
+
+        this.boundBox.setFromPoints([vA, vB, vC]);
+    }
+})();
+
+Object.assign(Sprite.prototype, { updateBound });
+
 Label.prototype = Object.assign(Object.create(Sprite.prototype), {
     constructor: Label,
     isLabel: true,
     setText(text) {
         this.text = text;
-        let fontface = this.options['fontface'] || 'Arial';
-        let fontsize = this.options.fontsize || 14;
+        let fontface = this.options['fontface'] || 'sans-serif';
+        let fontsize = this.options.fontsize || 16;
         let color = this.options.color || 'rgba(0,0,0,1)';
 
         let canvas = this.canvas;
@@ -47801,75 +48755,11 @@ Label.prototype = Object.assign(Object.create(Sprite.prototype), {
 
         this.texture.needsUpdate = true;
 
-        this.scale.set(canvas.width / 2339, canvas.height / 2339, 1.0);
         this.originScale = this.scale.clone();
         this.width = canvas.width;
         this.height = canvas.height;
         return
     },
-    updateBound: (function() {
-        const worldScale = new Vector3();
-        const mvPosition = new Vector3();
-        const vpPosition = new Vector4();
-
-        const alignedPosition = new Vector2();
-        const rotatedPosition = new Vector2();
-        const viewWorldMatrix = new Matrix4();
-
-        const vA = new Vector3();
-        const vB = new Vector3();
-        const vC = new Vector3();
-
-        const viewportMatrix = new Matrix4();
-
-        function transformVertex(vertexPosition, mvPosition, center, scale, sin, cos) {
-            // compute position in camera space
-            alignedPosition
-                .subVectors(vertexPosition, center)
-                .addScalar(0.5)
-                .multiply(scale);
-            // to check if rotation is not zero
-            if (sin !== undefined) {
-                rotatedPosition.x = cos * alignedPosition.x - sin * alignedPosition.y;
-                rotatedPosition.y = sin * alignedPosition.x + cos * alignedPosition.y;
-            } else {
-                rotatedPosition.copy(alignedPosition);
-            }
-            vertexPosition.copy(mvPosition);
-            vertexPosition.x += rotatedPosition.x;
-            vertexPosition.y += rotatedPosition.y;
-        }
-
-        return function box(camera) {
-            worldScale.set(this.width, this.height, 1);
-            viewWorldMatrix.getInverse(this.modelViewMatrix).premultiply(this.matrixWorld);
-            mvPosition.setFromMatrixPosition(this.modelViewMatrix);
-
-            mvPosition.applyMatrix4(viewWorldMatrix);
-
-            mvPosition.project(camera);
-
-            var a = 800 / 2;
-            var b = 800 / 2;
-            viewportMatrix.set(a, 0, 0, a /**/, 0, -b, 0, b /**/);
-            vpPosition.copy(mvPosition).applyMatrix4(viewportMatrix);
-
-            var rotation = this.material.rotation;
-            var sin, cos;
-            if (rotation !== 0) {
-                cos = Math.cos(rotation);
-                sin = Math.sin(rotation);
-            }
-
-            var center = this.center;
-
-            transformVertex(vA.set(-0.5, -0.5, 0), vpPosition, center, worldScale, sin, cos);
-            transformVertex(vB.set(0.5, -0.5, 0), vpPosition, center, worldScale, sin, cos);
-            transformVertex(vC.set(0.5, 0.5, 0), vpPosition, center, worldScale, sin, cos);
-
-            this.boundBox.setFromPoints([vA, vB, vC]);
-        }
-    })(),
 });
 
 class Room extends MapObejct {
@@ -47879,36 +48769,6 @@ class Room extends MapObejct {
         this.info = attr;
         let { name } = attr;
         this.name = name;
-        // this.outline = new Shape(parsePoints(this.info.outline[0][0]))
-        // this.boundBox = this.getBoundingRect(this.outline.getPoints())
-    }
-
-    render(context) {
-        if (!this.drawOutline) {
-            throw new Error('call updateOutline first')
-        }
-
-        context.beginPath();
-        this.drawOutline.getPoints().forEach((p, index) => {
-            if (index === 0) {
-                context.moveTo(p.x, -p.y);
-            } else {
-                context.lineTo(p.x, -p.y);
-            }
-        });
-        context.closePath();
-
-        context.fillStyle = '#c49c94';
-        context.fill();
-        context.stroke();
-
-        if (this.nameVisible) {
-            context.fillStyle = '#333333';
-            context.textBaseline = 'middle';
-            context.font =
-                '13px/1.4 \'Lantinghei SC\', \'Microsoft YaHei\', \'Hiragino Sans GB\', \'Helvetica Neue\', Helvetica, STHeiTi, Arial, sans-serif';
-            context.fillText(this.name, this.nameBounds.left, -this.nameBounds.center.y);
-        }
     }
 
     makeObject3D() {
@@ -47916,21 +48776,7 @@ class Room extends MapObejct {
         let shape = new THREE$1.Shape(points);
         let object = new THREE$1.Group();
 
-        // var center = funcArea.Center;
-        // floorObj.points.push({
-        //     name: funcArea.Name,
-        //     type: funcArea.Type,
-        //     position: new THREE.Vector3(center[0] * scale, floorHeight * scale, -center[1] * scale)
-        // });
-
-        //solid model
-        let extrudeSettings = {
-            depth: this.floor.info.height,
-            bevelEnabled: false,
-        };
-        let geometry = new THREE$1.ExtrudeGeometry(shape, extrudeSettings);
-        let material;
-        let mesh;
+        let geometry, material, mesh;
 
         geometry = new THREE$1.ShapeGeometry(shape);
         let groundMaterial = new THREE$1.MeshStandardMaterial({
@@ -47949,10 +48795,7 @@ class Room extends MapObejct {
         });
         mesh = new THREE$1.Mesh(geometry, groundMaterial);
         mesh.position.set(0, 0, 1);
-        // mesh.center.set(0, 0)
-        object.add(mesh);
-
-        //top wireframe
+        // object.add(mesh)
 
         if (this.info.walls) {
             let material = new THREE$1.MeshPhongMaterial({
@@ -47965,27 +48808,42 @@ class Room extends MapObejct {
             });
             this.info.walls.forEach(wall => {
                 let points = parsePoints(wall);
-                let geometry = new THREE$1.BoxGeometry(5, points[0].distanceTo(points[1]), this.floor.info.height);
-                let cube = new THREE$1.Mesh(geometry, material);
+                let geometry3d = new THREE$1.BoxGeometry(5, points[0].distanceTo(points[1]), this.floor.info.height);
+                let geometry2d = new THREE$1.PlaneGeometry(5, points[0].distanceTo(points[1]));
+                let cube = new THREE$1.Mesh(geometry3d, material);
                 cube.position.set(
                     (points[0].x + points[1].x) / 2,
                     (points[0].y + points[1].y) / 2,
                     this.floor.info.height / 2
                 );
                 cube.rotation.z = points[0].sub(points[1]).angle() + Math.PI / 2;
+                cube.onViewModeChange = is3dMode => {
+                    cube.geometry = is3dMode ? geometry3d : geometry2d;
+                    cube.position.setZ(is3dMode ? this.floor.info.height / 2 : 2);
+                };
                 object.add(cube);
             });
         } else {
-            material = new THREE$1.MeshLambertMaterial(
-                this.mapStyle.roomStyle[this.info.category || this.info.type] || this.mapStyle.roomStyle['default']
-            );
-            // material.depthTest = false
-            mesh = new THREE$1.Mesh(geometry, material);
+            let roomStyle =
+                this.mapStyle.roomStyle[this.info.category || this.info.type] || this.mapStyle.roomStyle['default'];
+            material = new THREE$1.MeshLambertMaterial(roomStyle);
+            let extrudeSettings = {
+                depth: this.floor.info.height,
+                bevelEnabled: false,
+            };
+            let geometry3d = new THREE$1.ExtrudeGeometry(shape, extrudeSettings);
+            let geometry2d = new THREE$1.ShapeGeometry(shape);
+            let mesh = new THREE$1.Mesh(geometry3d, material);
+            mesh.onViewModeChange = is3dMode => {
+                mesh.geometry = is3dMode ? geometry3d : geometry2d;
+                mesh.position.setZ(is3dMode ? 0 : 1);
+            };
             object.add(mesh);
 
             geometry = new THREE$1.Geometry().setFromPoints(points);
-            let wire = new THREE$1.Line(geometry, new THREE$1.LineBasicMaterial(this.mapStyle.strokeStyle));
+            let wire = new THREE$1.LineLoop(geometry, new THREE$1.LineBasicMaterial(this.mapStyle.strokeStyle));
             wire.position.set(0, 0, this.floor.info.height);
+            wire.onViewModeChange = is3dMode => wire.position.setZ(is3dMode ? this.floor.info.height : 2);
             object.add(wire);
         }
         if (this.info.pillars) {
@@ -48000,14 +48858,17 @@ class Room extends MapObejct {
                 let points = parsePoints(pillar);
                 box.setFromPoints(points).getCenter(center);
                 box.getSize(size);
-                let geometry = new THREE$1.BoxBufferGeometry(size.width, size.height, this.floor.info.height);
-                let cube = new THREE$1.Mesh(geometry, material);
+                let geometry3d = new THREE$1.BoxBufferGeometry(size.width, size.height, this.floor.info.height);
+                let geometry2d = new THREE$1.PlaneGeometry(size.width, size.height);
+                let cube = new THREE$1.Mesh(geometry3d, material);
                 cube.position.set(center.x, center.y, this.floor.info.height / 2);
+                cube.onViewModeChange = is3dMode => {
+                    cube.geometry = is3dMode ? geometry3d : geometry2d;
+                    cube.position.setZ(is3dMode ? this.floor.info.height / 2 : 2);
+                };
                 object.add(cube);
             });
         }
-
-        // object.add(wire)
 
         object.name = 'room';
         object.handler = this;
@@ -48017,7 +48878,9 @@ class Room extends MapObejct {
         if (sprite) {
             let center = object.box.getCenter(new THREE$1.Vector2());
             sprite.position.set(center.x, center.y, this.floor.info.height + 5);
+            sprite.scale.set(sprite.width / this.canvasScale, sprite.height / this.canvasScale, 1);
             sprite.center.set(0.5, 0);
+            sprite.onViewModeChange = is3dMode => sprite.position.setZ(is3dMode ? this.floor.info.height + 5 : 3);
             object.add(sprite);
         }
 
@@ -48027,7 +48890,7 @@ class Room extends MapObejct {
     }
 }
 
-const PUB_POINT_SIZE = new THREE$1.Vector2(20, 20);
+const PUB_POINT_SIZE$1 = new THREE$1.Vector2(18, 18);
 
 class PubPoint extends MapObejct {
     constructor(attr, floor) {
@@ -48049,45 +48912,18 @@ class PubPoint extends MapObejct {
     makeObject3D() {
         let material = this.mapStyle.materialMap.get(this.info.type);
         let sprite = new THREE$1.Sprite(material);
-        sprite.width = PUB_POINT_SIZE.width;
-        sprite.height = PUB_POINT_SIZE.height;
-        sprite.scale.set(
-            PUB_POINT_SIZE.width / this.canvasScale / 2.4,
-            PUB_POINT_SIZE.width / this.canvasScale / 2.4,
-            1
-        );
+        sprite.width = PUB_POINT_SIZE$1.width;
+        sprite.height = PUB_POINT_SIZE$1.height;
+        sprite.scale.set(PUB_POINT_SIZE$1.width / this.canvasScale, PUB_POINT_SIZE$1.height / this.canvasScale, 1);
         sprite.position.copy(this.center).setZ(this.floor.info.height + 5);
         sprite.handler = this;
         sprite.center.set(0.5, 0);
-        sprite.updateBound = camera => this.updateBound(camera);
         sprite.boundBox = new THREE$1.Box2();
+        sprite.onViewModeChange = is3dMode => sprite.position.setZ(is3dMode ? this.floor.info.height + 5 : 3);
         this.object3D = sprite;
         return sprite
     }
 }
-
-Object.assign(PubPoint.prototype, {
-    updateBound: (function() {
-        const mvPosition = new THREE$1.Vector3();
-        const vpPosition = new THREE$1.Vector4();
-
-        const viewportMatrix = new THREE$1.Matrix4();
-        return function(camera) {
-            let sprite = this.object3D;
-            mvPosition.copy(sprite.position);
-            sprite.parent.localToWorld(mvPosition);
-
-            mvPosition.project(camera);
-
-            var a = 800 / 2;
-            var b = 800 / 2;
-            viewportMatrix.set(a, 0, 0, a /**/, 0, -b, 0, b /**/);
-            vpPosition.copy(mvPosition).applyMatrix4(viewportMatrix);
-
-            sprite.boundBox.setFromCenterAndSize(vpPosition, PUB_POINT_SIZE);
-        }
-    })(),
-});
 
 class Floor extends MapObejct {
     constructor(attr) {
@@ -48128,11 +48964,21 @@ class Floor extends MapObejct {
                 shape.holes.push(new THREE$1.Path(parsePoints(array)));
             });
         }
-        let geometry = new THREE$1.ExtrudeBufferGeometry(shape, extrudeSettings);
-        let material = new THREE$1.MeshPhongMaterial(this.mapStyle.floor);
-        let mesh = new THREE$1.Mesh(geometry, material);
-        mesh.name = 'floor borad';
-        mesh.position.set(0, 0, -10);
+
+        {
+            let geometry3d = new THREE$1.ExtrudeBufferGeometry(shape, extrudeSettings);
+            let geometry2d = new THREE$1.ShapeGeometry(shape);
+            let material = new THREE$1.MeshPhongMaterial(this.mapStyle.floor);
+            let mesh = new THREE$1.Mesh(geometry3d, material);
+            mesh.name = 'floor';
+            mesh.handler = this;
+            mesh.position.set(0, 0, -10);
+            mesh.onViewModeChange = is3dMode => {
+                mesh.geometry = is3dMode ? geometry3d : geometry2d;
+                mesh.position.setZ(is3dMode ? -10 : -1);
+            };
+            object.add(mesh);
+        }
 
         object.height = floorHeight;
 
@@ -48147,8 +48993,6 @@ class Floor extends MapObejct {
                 object.sprites.push(roomObj.label);
                 object.add(roomObj);
             });
-        object.add(mesh);
-        this.object3D = object;
 
         this.pubPoints.forEach(pp => {
             let pointObj = pp.makeObject3D();
@@ -48156,6 +49000,7 @@ class Floor extends MapObejct {
             object.add(pointObj);
         });
 
+        this.object3D = object;
         return object
     }
 
@@ -48245,7 +49090,7 @@ class Building extends MapObejct {
             let mesh = new THREE$1.Mesh(geometry, new THREE$1.MeshBasicMaterial(this.mapStyle.building));
             mesh.material.depthTest = false;
             object.outline = mesh;
-            object.add(mesh);
+            // object.add(mesh)
         }
 
         object.rotateOnAxis(new THREE$1.Vector3(1, 0, 0), -Math.PI / 2);
@@ -48253,12 +49098,12 @@ class Building extends MapObejct {
         return object
     }
 
-    updateBound(camera) {
+    updateBound(map) {
         this.floors.forEach(floor => {
             if (this.showAll || floor.name === this.currentFloorNum) {
                 for (let i in floor.object3D.sprites) {
                     const sprite1 = floor.object3D.sprites[i];
-                    sprite1.updateBound(camera);
+                    sprite1.updateBound(map);
                     sprite1.visible = true;
                     for (let j = 0; j < i; j++) {
                         const sprite2 = floor.object3D.sprites[j];
@@ -48280,7 +49125,7 @@ class Building extends MapObejct {
         this.showAll = false;
         if (this.object3D) {
             this.object3D.visible = true;
-            this.object3D.outline && (this.object3D.outline.visible = false);
+            // this.object3D.outline && (this.object3D.outline.visible = false)
             this.object3D.children
                 .filter(obj => obj.name === 'floor')
                 .forEach(obj => {
@@ -48295,7 +49140,7 @@ class Building extends MapObejct {
         this.showAll = showAll;
         if (this.object3D) {
             this.object3D.visible = true;
-            this.object3D.outline && (this.object3D.outline.visible = true);
+            // this.object3D.outline && (this.object3D.outline.visible = true)
             let offset = 4;
             this.object3D.children.forEach((obj, index) => {
                 obj.visible = true;
@@ -48346,884 +49191,227 @@ class MapLoader {
 
 Object.assign(MapLoader.prototype, Object.create(THREE$1.Loader.prototype).__proto__);
 
+var themeNormal = {
+    name: 'test',
+    building: {
+        color: '#000000',
+        opacity: 0.1,
+        transparent: true,
+        depthTest: false,
+    },
+    floor: {
+        color: '#f4f4f4',
+        opacity: 1,
+        transparent: false,
+    },
+    selected: '#ffff55',
+    strokeStyle: {
+        color: '#5C4433',
+        opacity: 0.5,
+        transparent: true,
+        linewidth: 2,
+    },
+    fontStyle: {
+        color: '#231815',
+        fontsize: 40,
+        fontface: 'Helvetica, MicrosoftYaHei ',
+    },
+    pubPointImg: {
+        '11001': 'img/toilet.png',
+        '11002': 'img/ATM.png',
+        '21001': 'img/stair.png',
+        '21002': 'img/escalator.png',
+        '21003': 'img/lift.png',
+        '22006': 'img/entry.png',
+    },
+    roomStyle: {
+        '101': {
+            color: '#1f77b4',
+            opacity: 0.7,
+            transparent: true,
+        },
+        '102': {
+            color: '#aec7e8',
+            opacity: 0.7,
+            transparent: true,
+        },
+        '103': {
+            color: '#ffbb78',
+            opacity: 0.7,
+            transparent: true,
+        },
+        '104': {
+            color: '#98df8a',
+            opacity: 0.7,
+            transparent: true,
+        },
+        '105': {
+            color: '#bcbd22',
+            opacity: 0.7,
+            transparent: true,
+        },
+        '106': {
+            color: '#2ca02c',
+            opacity: 0.7,
+            transparent: true,
+        },
+        '107': {
+            color: '#dbdb8d',
+            opacity: 0.7,
+            transparent: true,
+        },
+        '108': {
+            color: '#EE8A31',
+            opacity: 0.7,
+            transparent: true,
+        },
+        '109': {
+            color: '#c49c94',
+            opacity: 0.7,
+            transparent: true,
+        },
+        '300': {
+            color: '#AAAAAA',
+            opacity: 0.7,
+            transparent: true,
+        },
+        '400': {
+            color: '#D3D3D3',
+            opacity: 0.7,
+            transparent: true,
+        },
+        default: {
+            color: '#c49c94',
+            opacity: 0.4,
+            transparent: true,
+        },
+    },
+};
+
 class ThemeLoader {
     constructor() {
         this.jsonLoader = new THREE$1.FileLoader();
         this.textureLoader = new THREE$1.TextureLoader();
         this.themeMap = new Map();
+
+        this._loadTheme('normal', themeNormal);
     }
 
     load(name, url) {
-        this.jsonLoader.load(
-            url,
-            json => {
-                let theme = JSON.parse(json);
-                this.themeMap.set(name, theme);
-                if (Object.keys(theme.pubPointImg)) {
-                    theme.materialMap = new Map();
-                    Object.entries(theme.pubPointImg).forEach(([k, v]) => {
-                        let texture = this.textureLoader.load(v, t => {
-                            t.needsUpdate = true;
-                            this.textureUpdated = true;
-                        });
-                        texture.minFilter = THREE$1.LinearFilter;
-                        let material = new THREE$1.SpriteMaterial({
-                            map: texture,
-                            sizeAttenuation: false,
-                            transparent: true,
-                        });
-                        theme.materialMap.set(k, material);
-                    });
-                }
-                this.themeUpdated = true;
-            },
-            undefined,
-            e => console.error(e)
-        );
+        this.jsonLoader.load(url, json => this._loadTheme(name, json), undefined, e => console.error(e));
     }
 
     getTheme(name = 'normal') {
         return this.themeMap.get(name) || this.themeMap.get('normal')
     }
+
+    _loadTheme(name, theme) {
+        theme = typeof theme === 'string' ? JSON.parse(theme) : theme;
+        this.themeMap.set(name, theme);
+        if (Object.keys(theme.pubPointImg)) {
+            theme.materialMap = new Map();
+            Object.entries(theme.pubPointImg).forEach(([k, v]) => {
+                let texture = this.textureLoader.load(v, t => {
+                    t.needsUpdate = true;
+                    this.textureUpdated = true;
+                });
+                texture.minFilter = THREE$1.LinearFilter;
+                let material = new THREE$1.SpriteMaterial({
+                    map: texture,
+                    sizeAttenuation: false,
+                    transparent: true,
+                    alphaTest: 0.1,
+                });
+                theme.materialMap.set(k, material);
+            });
+        }
+        this.themeUpdated = true;
+    }
 }
 
 Object.assign(ThemeLoader.prototype, Object.create(THREE$1.Loader.prototype).__proto__);
 
-const addEvent = (el, type, fn, capture) => {
-    el.addEventListener(type, fn, capture);
-};
-
-const removeEvent = (el, type, fn, capture) => {
-    el.removeEventListener(type, fn, capture);
-};
-
-const STATE = {
-    NONE: -1,
-    ROTATE: 0,
-    ZOOM: 1,
-    PAN: 2,
-    CLICK: 3,
-    TOUCH_ROTATE: 5,
-    TOUCH_ZOOM_PAN: 6,
-};
-const userRotateSpeed = 2.0;
-const autoRotateSpeed = 1.0;
-const autoRotationAngle = ((2 * Math.PI) / 60 / 60) * autoRotateSpeed;
-const EPS = 1e-7;
-const PIXELS_PER_ROUND = 1800;
-const SCALE_STEP = 1.05;
-const TOUCH_SCALE_STEP = 1.03;
-
-class OrbitControl {
-    constructor(camera, wrapper) {
-        this.camera = camera;
-        this.wrapper = wrapper;
-
-        this.minPolarAngle = 0; // radians
-        this.maxPolarAngle = Math.PI / 2; // radians
-
-        this.minDistance = 0;
-        this.maxDistance = Infinity;
-
-        this.enabled = true;
-        this.scrollWheelZoomEnabled = true;
-        this.viewChanged = true;
-
-        this.onClickListener = null;
-
-        this.onHoverListener = null;
-
-        this._initListeners();
-        this._initVars();
-    }
-
-    destroy() {
-        this._initListeners(true);
-    }
-
-    reset() {
-        this._initVars();
-    }
-
-    pan(vector) {
-        let distance = vector.distanceTo(new THREE$1.Vector3());
-        vector.transformDirection(this.camera.matrix);
-        vector.multiplyScalar((distance * this.currentScale * 10) / 3);
-
-        this.camera.position.add(vector);
-        this.center.add(vector);
-
-        this.viewChanged = true;
-    }
-
-    rotateLeft(angle = autoRotationAngle) {
-        this.thetaDelta -= angle;
-    }
-
-    rotateRight(angle = autoRotationAngle) {
-        this.thetaDelta += angle;
-    }
-
-    rotateUp(angle = autoRotationAngle) {
-        this.phiDelta -= angle;
-    }
-
-    rotateDown(angle = autoRotationAngle) {
-        this.phiDelta += angle;
-    }
-
-    zoomIn(scale = 1.25) {
-        this.scale *= scale;
-        this.currentScale *= scale;
-    }
-
-    zoomOut(scale = 0.8) {
-        this.scale *= scale;
-        this.currentScale *= scale;
-    }
-
-    update() {
-        if (
-            Math.abs(this.thetaDelta) < EPS &&
-            Math.abs(this.phiDelta) < EPS &&
-            Math.abs(this.scale - 1) < EPS
-        ) {
-            return
-        }
-
-        var position = this.camera.position;
-        var offset = position.clone().sub(this.center);
-
-        // angle from z-axis around y-axis
-        var theta = Math.atan2(offset.x, offset.z);
-        // angle from y-axis
-
-        var phi = Math.atan2(
-            Math.sqrt(offset.x * offset.x + offset.z * offset.z),
-            offset.y
-        );
-
-        if (this.autoRotate) {
-            this.rotateLeft(autoRotationAngle);
-        }
-
-        theta += this.thetaDelta;
-        phi += this.phiDelta;
-
-        // restrict phi to be between desired limits
-        phi = Math.max(this.minPolarAngle, Math.min(this.maxPolarAngle, phi));
-
-        // restrict phi to be betwee EPS and PI-EPS
-        phi = Math.max(EPS, Math.min(Math.PI * 0.37 - EPS, phi));
-
-        var radius = offset.length() / this.scale;
-
-        // restrict radius to be between desired limits
-        radius = Math.max(this.minDistance, Math.min(this.maxDistance, radius));
-
-        offset.x = radius * Math.sin(phi) * Math.sin(theta);
-        offset.y = radius * Math.cos(phi);
-        offset.z = radius * Math.sin(phi) * Math.cos(theta);
-
-        position.copy(this.center).add(offset);
-
-        this.camera.lookAt(this.center);
-        this.thetaDelta = 0;
-        this.phiDelta = 0;
-        this.scale = 1;
-
-        if (this.lastPosition.distanceTo(this.camera.position) > 0) {
-            this.lastPosition.copy(this.camera.position);
-            this.viewChanged = true;
-        }
-    }
-
-    _initVars() {
-        this.startPosition = new THREE$1.Vector2();
-        this.endPosition = new THREE$1.Vector2();
-        this.deltaVector = new THREE$1.Vector2();
-        this.touchStartPoints = [
-            new THREE$1.Vector2(),
-            new THREE$1.Vector2(),
-            new THREE$1.Vector2(),
-        ];
-        this.touchEndPoints = [
-            new THREE$1.Vector2(),
-            new THREE$1.Vector2(),
-            new THREE$1.Vector2(),
-        ];
-
-        this.phiDelta = 0;
-        this.thetaDelta = 0;
-        this.scale = 1;
-        this.currentScale = 1;
-
-        this.state = STATE.NONE;
-
-        this.lastPosition = new THREE$1.Vector3();
-
-        this.center = new THREE$1.Vector3();
-    }
-
-    _initListeners(remove) {
-        var eventType = remove ? removeEvent : addEvent;
-        eventType(this.wrapper, 'touchstart', this, {
-            passive: false,
-        });
-        eventType(this.wrapper, 'mousedown', this, {
-            passive: false,
-        });
-        eventType(window, 'touchend', this, {
-            passive: false,
-        });
-        eventType(window, 'mouseup', this, {
-            passive: false,
-        });
-        eventType(window, 'touchmove', this, {
-            passive: false,
-        });
-        eventType(window, 'mousemove', this);
-        eventType(this.wrapper, 'mousewheel', this);
-        eventType(window, 'contextmenu', this, false);
-    }
-
-    handleEvent(e) {
-        switch (e.type) {
-        case 'touchstart':
-        case 'mousedown':
-            if (e.touches && e.touches.length > 1) {
-                this._touchStart(e);
-            } else {
-                this._start(e);
-            }
-            break
-        case 'touchmove':
-        case 'mousemove':
-            if (
-                e.touches &&
-                    e.touches.length > 1 &&
-                    (this.state === STATE.ZOOM || this.state === STATE.ROTATE)
-            ) {
-                this._touchMove(e);
-            } else {
-                this._move(e);
-            }
-            break
-        case 'mouseout':
-            this.state = STATE.NONE;
-            break
-        case 'touchend':
-        case 'mouseup':
-            this._end(e);
-            break
-        case 'mousewheel':
-            this._wheel(e);
-            break
-        case 'contextmenu':
-            e.preventDefault();
-            break
-        }
-        e.preventDefault();
-    }
-
-    _start(e) {
-        if (!this.enabled) return
-
-        // e.preventDefault()
-
-        if (this.state === STATE.NONE) {
-            if (e.button === 0 || (e.touches && e.touches.length == 1)) {
-                this.state = STATE.CLICK;
-            } else if (e.button === 1) {
-                this.state = STATE.ZOOM;
-            } else if (e.button === 2) {
-                this.state = STATE.ROTATE;
-            }
-        }
-
-        const point = e.touches ? e.touches[0] : e;
-
-        this.startPosition.set(point.pageX, point.pageY);
-    }
-
-    _move(e) {
-        if (!this.enabled) return
-        if (this.state !== STATE.NONE) {
-            // e.preventDefault()
-            const point = e.touches ? e.touches[0] : e;
-
-            this.endPosition.set(point.pageX, point.pageY);
-            this.deltaVector.subVectors(this.endPosition, this.startPosition);
-            if (this.deltaVector.length() == 0) {
-                return
-            }
-            if (this.state === STATE.ROTATE) {
-                this.rotateLeft(
-                    ((2 * Math.PI * this.deltaVector.x) / PIXELS_PER_ROUND) *
-                        userRotateSpeed
-                );
-                this.rotateUp(
-                    ((2 * Math.PI * this.deltaVector.y) / PIXELS_PER_ROUND) *
-                        userRotateSpeed
-                );
-            } else if (this.state === STATE.ZOOM) {
-                if (this.deltaVector.y > 0) {
-                    this.zoomIn();
-                } else {
-                    this.zoomOut();
-                }
-            } else if (this.state === STATE.CLICK || this.state === STATE.PAN) {
-                this.state = STATE.PAN;
-                this.pan(
-                    new THREE$1.Vector3(
-                        -this.deltaVector.x,
-                        this.deltaVector.y,
-                        0
-                    )
-                );
-            }
-            this.startPosition.copy(this.endPosition);
-        } else if (this.onHoverListener && this.wrapper.contains(e.target)) {
-            this.onHoverListener(e);
-        }
-    }
-
-    _end(e) {
-        if (!this.enabled) return
-        if (this.state === STATE.NONE) return
-        let state = this.state;
-        this.state = STATE.NONE;
-        if (state === STATE.CLICK && this.onClickListener) {
-            this.onClickListener(e);
-        }
-    }
-
-    _wheel(e) {
-        if (!this.enabled) return
-        if (!this.scrollWheelZoomEnabled) return
-
-        let delta = e.wheelDelta ? e.wheelDelta / 120 : -e.detail / 3;
-        let scale = Math.pow(SCALE_STEP, delta);
-        this.scale *= scale;
-        this.currentScale *= scale;
-    }
-
-    _touchStart(e) {
-        if (!this.enabled) return
-        ;[...e.touches]
-            .filter((_, i) => i < 3)
-            .map(({ pageX, pageY }, index) =>
-                this.touchStartPoints[index].set(pageX, pageY)
-            );
-        if (e.touches.length === 2) {
-            this.state = STATE.ZOOM;
-            this.span.innerHTML = '_touchStart';
-        } else {
-            this.state = STATE.ROTATE;
-        }
-    }
-
-    _touchMove(e) {
-        if (!this.enabled) return
-        if (this.state === STATE.NONE) return
-        ;[...e.touches]
-            .filter((_, i) => i < 3)
-            .map(({ pageX, pageY }, index) =>
-                this.touchEndPoints[index].set(pageX, pageY)
-            );
-        this.span.innerHTML = '_touchMove';
-        if (this.state === STATE.ZOOM) {
-            let dStart = this.touchStartPoints[1].distanceTo(
-                this.touchStartPoints[0]
-            );
-            let dEnd = this.touchEndPoints[1].distanceTo(this.touchEndPoints[0]);
-            if (Math.abs(dStart - dEnd) < 5) {
-                return
-            } else if (dStart < dEnd) {
-                this.zoomIn(TOUCH_SCALE_STEP);
-            } else {
-                this.zoomOut(1 / TOUCH_SCALE_STEP);
-            }
-            // } else if (this.state === STATE.ROTATE) {
-        }
-        this.touchEndPoints.forEach((p, i) => this.touchStartPoints[i].copy(p));
-    }
-}
-
-Object.assign(
-    OrbitControl.prototype,
-    Object.create(THREE$1.EventDispatcher.prototype)
-);
-
-class BaseControl {
-    constructor(renderer) {
-        this.renderer = renderer;
-        this.canvas = this.renderer.canvas;
-    }
-}
-
-function styleInject(css, ref) {
-  if ( ref === void 0 ) ref = {};
-  var insertAt = ref.insertAt;
-
-  if (!css || typeof document === 'undefined') { return; }
-
-  var head = document.head || document.getElementsByTagName('head')[0];
-  var style = document.createElement('style');
-  style.type = 'text/css';
-
-  if (insertAt === 'top') {
-    if (head.firstChild) {
-      head.insertBefore(style, head.firstChild);
-    } else {
-      head.appendChild(style);
-    }
-  } else {
-    head.appendChild(style);
-  }
-
-  if (style.styleSheet) {
-    style.styleSheet.cssText = css;
-  } else {
-    style.appendChild(document.createTextNode(css));
-  }
-}
-
-var css = "/* CSS */\r\n\r\n.imap-controls, .imap-overlays {\r\n    position: absolute;\r\n    top: 0;\r\n    left: 0;\r\n    width: 100%;\r\n    height: 100%;\r\n    pointer-events: none;\r\n    overflow: hidden;\r\n}\r\n\r\n.imap-controls *, .imap-overlays * {\r\n    pointer-events: auto;\r\n}\r\n\r\n.imap-overlays span {\r\n    position: absolute;\r\n    display: none;\r\n    padding: 7px;\r\n    background: white;\r\n    border: solid 1px #ccc;\r\n    max-width: 140px;\r\n}\r\n\r\n.imap-floor-control {\r\n    position: absolute;\r\n    right: 10px;\r\n    top: 10px;\r\n    z-index: 100;\r\n    background: white;\r\n    border: solid 1px #dfdfdf;\r\n    text-align: center;\r\n    border-radius: 3px;\r\n    font-size: 14px;\r\n}\r\n\r\n.imap-floor-control li {\r\n    list-style: none;\r\n    line-height: 25px;\r\n    width: 25px;\r\n    height: 25px;\r\n    border-bottom: solid 1px #dfdfdf;\r\n}\r\n\r\n.imap-floor-control li:last-child {\r\n    border-bottom: none;\r\n}";
-styleInject(css);
-
-const TEMPLATE = `
-<ul class='imap-floor-control'>
-  <% for(let i=0; i < data.length; i++) { %>
-    <li><%= data[i] %></li>
-  <% } %>
-</ul>
-`;
-const context$1 = compileTemplate(TEMPLATE);
-
-class FloorControl extends BaseControl {
-    constructor(renderer, camera) {
-        super(renderer);
-
-        this.camera = camera;
-    }
-
-    show(wrapper, building) {
-        this.building = building;
-
-        const floors = new Map(building.floors.map(f => [f.info.name, f]));
-        if (floors.size < 2) {
-            return
-        }
-        appendHTML(
-            wrapper,
-            context$1(['All', ...building.floors.map(f => f.name).reverse()])
-        );
-        let elements = [...wrapper.getElementsByTagName('li')];
-        elements.forEach(ele =>
-            ele.addEventListener('click', () =>
-                this.showFloor(floors.get(ele.innerHTML))
-            )
-        );
-    }
-
-    showFloor(floor) {
-        if (floor) {
-            this.building.showFloor(floor.name);
-        } else {
-            this.building.showAllFloors();
-        }
-    }
-}
-
-class Overlay {
-    constructor() {}
-
-    show() {
-        this.visible = true;
-    }
-
-    hide() {
-        this.visible = false;
-    }
-
-    removeFromParent() {
-        if (this.object3D && this.object3D.parent) {
-            this.object3D.parent.remove(this.object3D);
-        }
-    }
-
-    setLocation(location /*animate*/) {
-        this.object3D.position.copy(location.localPosition);
-    }
-}
-
-Object.defineProperties(Overlay.prototype, {
-    visible: {
-        enumerable: true,
-        configurable: false,
-        get: function() {
-            return this.object3D && this.object3D.visible
+function loaderMixin(XMap) {
+    Object.assign(XMap.prototype, {
+        load(fileName) {
+            this.mapLoader.load(fileName).then(building => {
+                this.floorControl.show(this.controlWrapper, building);
+                this.building = building;
+                this.renderer.setClearColor('#ffffff');
+                this._scene.add(building.object3D);
+                // building.showAllFloors()
+                building.showFloor('F1');
+                this.dispatchEvent({ type: 'mapLoaded' });
+                this._overlays.forEach(overlay => this._addOverlay(overlay));
+
+                this.setDefaultView();
+                this.animate();
+                this.renderer.domElement.style.opacity = 1;
+                this.building.updateBound(this);
+                this.setViewMode(this.options.viewMode);
+            });
         },
-        set: function(value) {
-            this.object3D && (this.object3D.visible = value);
-        },
-    },
 
-    onHover: {
-        enumerable: false,
-        configurable: false,
-        get: function() {
-            return this.options && this.options.onHover
-        },
-    },
+        loadTheme() {},
 
-    onClick: {
-        enumerable: false,
-        configurable: false,
-        get: function() {
-            return this.options && this.options.onClick
-        },
-    },
-
-    onAppend: {
-        enumerable: false,
-        configurable: false,
-        get: function() {
-            return this.options && this.options.onAppend
-        },
-    },
-});
-
-const PUB_POINT_SIZE$1 = new THREE$1.Vector2(20, 20);
-
-class Marker extends Overlay {
-    constructor(location, options = {}) {
-        super();
-
-        this.options = options;
-
-        this.location = location;
-        this.floor = location.floor;
-        this.position = location.localPosition;
-
-        this.makeObject3D();
-    }
-
-    makeObject3D() {
-        let { icon } = this.options;
-
-        this.texture = new THREE$1.TextureLoader().load(icon, t => {
-            t.needsUpdate = true;
-        });
-        this.texture.minFilter = THREE$1.LinearFilter;
-        this.material = new THREE$1.SpriteMaterial({
-            map: this.texture,
-            sizeAttenuation: false,
-            transparent: true,
-            depthTest: false,
-        });
-
-        let sprite = new THREE$1.Sprite(this.material);
-        let size = this.options.size || PUB_POINT_SIZE$1;
-        let align = this.options.align || 'CENTER';
-        sprite.width = size.width;
-        sprite.height = size.height;
-        sprite.scale.set(size.width / this.canvasScale, size.width / this.canvasScale, 1);
-        sprite.position.copy(this.position);
-        sprite.handler = this;
-        sprite.type = 'Marker';
-        if (align === 'CENTER') {
-            sprite.center.set(0.5, 0.5);
-        } else if (align === 'BOTTOM') {
-            sprite.center.set(0.5, 0);
-        }
-        sprite.renderOrder = 10;
-        this.object3D = sprite;
-        return sprite
-    }
-}
-
-var Overlays = {
-    Overlay,
-    Marker,
-};
-
-const overlayMixins = map => {
-    Object.defineProperties(Overlay.prototype, {
-        canvasScale: {
-            enumerable: false,
-            configurable: false,
-            get: function reactiveGetter() {
-                return map._canvasScale
-            },
+        getMapStyle() {
+            return this.themeLoader.getTheme()
         },
     });
-};
+}
 
-const PERSPECTIVE_FOV = 20;
-const viewportMatrix = new THREE$1.Matrix4();
+function initLoaders(mo) {
+    mo.mapLoader = new MapLoader(false);
+    mo.themeLoader = new ThemeLoader();
+}
 
-class Map$1 {
+function initMixin(XMap) {
+    Object.assign(XMap.prototype, EventDispatcher.prototype);
+    Object.assign(XMap.prototype, {
+        _init(el, options) {
+            this.options = options;
+            this.wrapper = typeof el == 'string' ? document.querySelector(el) : el;
+            this.wrapper.style.overflow = 'hidden';
+
+            this._overlays = new Set();
+
+            initView(this);
+
+            this.control = new OrbitControl(this._camera, this.mapWrapper);
+            this.floorControl = new FloorControl(this._camera, this.mapWrapper);
+
+            initEvent(this);
+            initLoaders(this);
+
+            mapObejctMixins(this);
+            overlayMixins(this);
+        },
+    });
+}
+
+class XMap {
     constructor(el, options = {}) {
-        this.options = options;
-        this.wrapper = typeof el == 'string' ? document.querySelector(el) : el;
-        this.wrapper.style.overflow = 'hidden';
-
-        this.currentScale = 1;
-
-        this._overlays = new Set();
-
-        mapObejctMixins(this);
-        overlayMixins(this);
-
-        this._initView();
-        this._initLoaders();
-
-        this.themeLoader.load('normal', '/theme/normal.json');
-    }
-
-    _initDom() {
-        this.mapWrapper = document.createElement('div');
-        this.mapWrapper.style.overflow = 'hidden';
-        this.mapWrapper.style.width = '100%';
-        this.mapWrapper.style.height = '100%';
-        this.wrapper.appendChild(this.mapWrapper);
-
-        this.overlayWrapper = document.createElement('div');
-        this.overlayWrapper.className = 'imap-overlays';
-        this.wrapper.appendChild(this.overlayWrapper);
-
-        this.controlWrapper = document.createElement('div');
-        this.controlWrapper.className = 'imap-controls';
-        this.wrapper.appendChild(this.controlWrapper);
-    }
-
-    _initView() {
-        this._initDom();
-
-        let width = this.wrapper.clientWidth,
-            height = this.wrapper.clientHeight;
-        this._wrapperSize = new THREE$1.Vector2(width, height);
-        this._canvasScale = Math.round(height / Math.sin((PERSPECTIVE_FOV / 180) * Math.PI));
-
-        this._scene = new THREE$1.Scene();
-        this._camera = new THREE$1.PerspectiveCamera(PERSPECTIVE_FOV, width / height, 140, 1000000);
-
-        this._sceneOrtho = new THREE$1.Scene();
-        this._cameraOrtho = new THREE$1.OrthographicCamera(-width / 2, height / 2, width / 2, -height / 2, 1, 10);
-        this._cameraOrtho.position.z = 10;
-
-        this.control = new OrbitControl(this._camera, this.mapWrapper);
-        this.control.onClickListener = e => this._onClicked(e);
-        this.control.onHoverListener = e => this._onHover(e);
-
-        this.renderer = new THREE$1.WebGLRenderer({
-            antialias: true,
-        });
-        this.renderer.autoClear = false;
-
-        this.floorControl = new FloorControl(this.renderer, this._camera);
-
-        //set up the lights
-        let light = new THREE$1.DirectionalLight(0xffffff);
-        light.position.set(-4000, 5000, -6000);
-        this._scene.add(light);
-
-        light = new THREE$1.DirectionalLight(0xffffff);
-        light.position.set(4000, 5000, 6000);
-        this._scene.add(light);
-
-        //canvas div
-        this.renderer.setSize(width, height);
-        let canvasDiv = this.renderer.domElement;
-        this.mapWrapper.appendChild(canvasDiv);
-        canvasDiv.style.width = '100%';
-        canvasDiv.style.height = '100%';
-
-        let hw = this._wrapperSize.width / 2,
-            hh = this._wrapperSize.height / 2;
-        viewportMatrix.set(hw, 0, 0, hw, 0, -hh, 0, hh);
-    }
-
-    _initLoaders() {
-        this.mapLoader = new MapLoader(false);
-        this.themeLoader = new ThemeLoader();
-
-        addEvent(window, 'resize', () => this._refreshSize());
-    }
-
-    load(fileName) {
-        this.mapLoader.load(fileName).then(building => {
-            this.floorControl.show(this.controlWrapper, building);
-            this.building = building;
-            this.renderer.setClearColor('#F2F2F2');
-            this._scene.add(building.object3D);
-            // building.showAllFloors()
-            building.showFloor('F1');
-
-            this._overlays.forEach(overlay => this._addOverlay(overlay));
-
-            this.setDefaultView();
-            this.animate();
-        });
-    }
-
-    getMapStyle() {
-        return this.themeLoader.getTheme()
-    }
-
-    setDefaultView() {
-        var camAngle = Math.PI / 2;
-        var camDir = [Math.cos(camAngle), Math.sin(camAngle)];
-        var camLen = 5000;
-        var tiltAngle = (75.0 * Math.PI) / 180.0;
-        this._camera.position.set(-camDir[1] * camLen, Math.sin(tiltAngle) * camLen, camDir[0] * camLen);
-        this._camera.lookAt(this._scene.position);
-
-        this.control.reset();
-        this.control.viewChanged = true;
-        return this
-    }
-
-    addOverlay(overlay) {
-        this._overlays.add(overlay);
-        this._addOverlay(overlay);
-    }
-
-    removeOverlay(...overlays) {
-        this._removeOverlays(overlays);
-    }
-
-    clearOverlays() {
-        this._removeOverlays(this._overlays);
-    }
-
-    _removeOverlays(overlays) {
-        overlays.forEach(overlay => {
-            overlay.removeFromParent();
-            this._overlays.delete(overlay);
-        });
-    }
-
-    _addOverlay(overlay) {
-        if (this.building) {
-            let floorObj = this.building.getFloor(overlay.floor).object3D;
-            floorObj.add(overlay.object3D);
-            overlay.onAppend && overlay.onAppend(floorObj);
-        }
-    }
-
-    _onClicked(e) {
-        // e.preventDefault();
-
-        var mouse = new THREE$1.Vector2();
-        if (e.type == 'touchstart') {
-            mouse.x = (e.touches[0].clientX / this._wrapperSize.width) * 2 - 1;
-            mouse.y = -(e.touches[0].clientY / this._wrapperSize.height) * 2 + 1;
-        } else {
-            mouse.x = (e.clientX / this._wrapperSize.width) * 2 - 1;
-            mouse.y = -(e.clientY / this._wrapperSize.height) * 2 + 1;
-        }
-        var vector = new THREE$1.Vector3(mouse.x, mouse.y, 0.5);
-        if (!this._raycaster) {
-            this._raycaster = new THREE$1.Raycaster();
-        }
-        this._raycaster.setFromCamera(vector, this._camera);
-        let intersects = this._raycaster.intersectObjects([...this._overlays].map(overlay => overlay.object3D), false);
-        if (intersects.length > 0) {
-            let marker = intersects[0].object.handler;
-            marker.onClick && marker.onClick();
-        }
-    }
-
-    _onHover(e) {
-        // e.preventDefault();
-
-        var mouse = new THREE$1.Vector2();
-        if (e.type == 'touchstart') {
-            mouse.x = (e.touches[0].clientX / this._wrapperSize.width) * 2 - 1;
-            mouse.y = -(e.touches[0].clientY / this._wrapperSize.height) * 2 + 1;
-        } else {
-            mouse.x = (e.clientX / this._wrapperSize.width) * 2 - 1;
-            mouse.y = -(e.clientY / this._wrapperSize.height) * 2 + 1;
-        }
-        var vector = new THREE$1.Vector3(mouse.x, mouse.y, 0.5);
-        if (!this._raycaster) {
-            this._raycaster = new THREE$1.Raycaster();
-        }
-        this._raycaster.setFromCamera(vector, this._camera);
-        let intersects = this._raycaster.intersectObjects([...this._overlays].map(overlay => overlay.object3D), false);
-        let hoveredEntity;
-        if (intersects.length > 0) {
-            hoveredEntity = intersects[0];
-        }
-        if (hoveredEntity && hoveredEntity.object === this._hoveredEntity) {
-            return
-        } else {
-            if (this._hoveredEntity != null) {
-                this._hoveredEntity.handler.onHover && this._hoveredEntity.handler.onHover(false);
-            }
-            if (hoveredEntity != null) {
-                this._hoveredEntity = hoveredEntity.object;
-                this._hoveredEntity.handler.onHover && this._hoveredEntity.handler.onHover(true);
-            } else {
-                this._hoveredEntity = null;
-            }
-        }
-    }
-
-    _refreshSize() {
-        let width = this.wrapper.clientWidth,
-            height = this.wrapper.clientHeight;
-        this._wrapperSize = new THREE$1.Vector2(width, height);
-        this._canvasScale = Math.round(height / Math.sin((PERSPECTIVE_FOV / 180) * Math.PI));
-
-        this._camera.aspect = width / height;
-        this._camera.updateProjectionMatrix();
-
-        this._cameraOrtho.left = -width / 2;
-        this._cameraOrtho.top = height / 2;
-        this._cameraOrtho.right = width / 2;
-        this._cameraOrtho.bottom = -height / 2;
-        this._cameraOrtho.updateProjectionMatrix();
-
-        this.renderer.setSize(width, height);
+        this._init(el, options);
     }
 
     animate() {
         requestAnimationFrame(() => this.animate());
         this.control.update();
-
-        this.building && this.building.updateBound(this._camera);
+        if (this.control.viewChanged) {
+            this.building && this.building.updateBound(this);
+        }
 
         this.renderer.clear();
         this.renderer.render(this._scene, this._camera);
-
         this.renderer.clearDepth();
-        // this._relocate()
         this.control.viewChanged = false;
     }
-
-    _relocate() {
-        let obj = this.testInfoWindow;
-        obj.worldPosition.copy(obj.localPosition);
-        let floor = this.building.getFloor(obj.floor).object3D;
-        if (!floor.visible) {
-            obj.view.style.display = 'none';
-        } else {
-            obj.view.style.display = 'block';
-            floor.localToWorld(obj.worldPosition);
-            obj.worldPosition.project(this._camera);
-            obj.screenPosition
-                .copy(obj.worldPosition)
-                .applyMatrix4(viewportMatrix)
-                .ceil();
-            obj.view.style.left = obj.screenPosition.x + 'px';
-            obj.view.style.top = obj.screenPosition.y - obj.view.clientHeight + 'px';
-        }
-    }
 }
+initMixin(XMap);
+eventMixin(XMap);
+overlayMixin(XMap);
+loaderMixin(XMap);
+viewMixin(XMap);
 
 class Location {
     constructor(floor, x, y, z = 0) {
@@ -49243,31 +49431,9 @@ var Objects = {
     Label,
 };
 
-(function() {
-    var lastTime = 0;
-    var vendors = ['ms', 'moz', 'webkit', 'o'];
-    for (var x = 0; x < vendors.length && !window.requestAnimationFrame; ++x) {
-        window.requestAnimationFrame = window[vendors[x] + 'RequestAnimationFrame'];
-        window.cancelAnimationFrame = window[vendors[x] + 'CancelAnimationFrame'] || window[vendors[x] + 'CancelRequestAnimationFrame'];
-    }
-    if (!window.requestAnimationFrame)
-        window.requestAnimationFrame = function(callback) {
-            var currTime = new Date().getTime();
-            var timeToCall = Math.max(0, 16 - (currTime - lastTime));
-            var id = window.setTimeout(function() {
-                callback(currTime + timeToCall);
-            }, timeToCall);
-            lastTime = currTime + timeToCall;
-            return id
-        };
-    if (!window.cancelAnimationFrame)
-        window.cancelAnimationFrame = function(id) {
-            clearTimeout(id);
-        };
-})();
-
 var index = {
-    Map: Map$1,
+    Map: XMap,
+    ...Constants,
     ...Models,
     ...Overlays,
     ...THREE$1,

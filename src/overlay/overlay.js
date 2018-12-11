@@ -1,3 +1,6 @@
+import THREE from '../libs/threejs/index'
+import { eventMixin } from '../core/event'
+
 class Overlay {
     constructor() {}
 
@@ -20,6 +23,9 @@ class Overlay {
         this.object3D.position.copy(location.localPosition)
     }
 }
+
+Object.assign(Overlay.prototype, THREE.EventDispatcher.prototype)
+eventMixin(Overlay)
 
 Object.defineProperties(Overlay.prototype, {
     visible: {
@@ -55,6 +61,11 @@ Object.defineProperties(Overlay.prototype, {
         get: function() {
             return this.options && this.options.onAppend
         },
+    },
+
+    isOverlay: {
+        value: true,
+        writable: false,
     },
 })
 
