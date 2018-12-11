@@ -1,11 +1,12 @@
 import Overlay from './overlay'
 
 class HTMLOverlay extends Overlay {
-    constructor(location) {
+    constructor(location, options) {
         super()
 
         this.location = location
-
+        this.options = options
+        
         if (typeof this.initialize !== 'function' || typeof this.render !== 'function') {
             throw new Error('initialize && render must be implements')
         }
