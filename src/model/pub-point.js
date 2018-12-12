@@ -1,28 +1,26 @@
-import MapObject from './map-object'
+import { mixinMapObject } from './map-object'
 import THREE from '../libs/threejs/index'
 
-export const PUB_POINT_SIZE = new THREE.Vector2(18, 18)
+export const PUB_POINT_SIZE = new THREE.Vector2(24, 24)
 
-class PubPoint extends MapObject {
+class PubPoint extends THREE.Sprite {
     constructor(attr, floor) {
-        super(attr)
+        super()
         this.info = attr
         let { name } = attr
         this.name = name
         this.floor = floor
         this.center = new THREE.Vector2(this.info.outline[0][0][0], this.info.outline[0][0][1])
         this.boundBox = new THREE.Box2()
+
+        this.initObject3D()
     }
 
-    render() {
-        if (!this.bounds) {
-            throw new Error('call updateOutline first')
+    initObject3D() {
+        let sprite = this
+        sprite.onThemeChange = theme => {
+            if (theme.materialMap.has(this.info.type)) sprite.material = theme.materialMap.get(this.info.type)
         }
-    }
-
-    makeObject3D() {
-        let material = this.mapStyle.materialMap.get(this.info.type)
-        let sprite = new THREE.Sprite(material)
         sprite.width = PUB_POINT_SIZE.width
         sprite.height = PUB_POINT_SIZE.height
         sprite.scale.set(PUB_POINT_SIZE.width / this.canvasScale, PUB_POINT_SIZE.height / this.canvasScale, 1)
@@ -31,9 +29,9 @@ class PubPoint extends MapObject {
         sprite.center.set(0.5, 0)
         sprite.boundBox = new THREE.Box2()
         sprite.onViewModeChange = is3dMode => sprite.position.setZ(is3dMode ? this.floor.info.height + 5 : 3)
-        this.object3D = sprite
-        return sprite
     }
 }
+
+mixinMapObject(PubPoint)
 
 export default PubPoint

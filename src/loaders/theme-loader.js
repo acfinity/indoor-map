@@ -1,8 +1,9 @@
 import THREE from '../libs/threejs/index'
 import themeNormal from '../assets/theme/normal'
 
-class ThemeLoader {
+class ThemeLoader extends THREE.Loader {
     constructor() {
+        super()
         this.jsonLoader = new THREE.FileLoader()
         this.textureLoader = new THREE.TextureLoader()
         this.themeMap = new Map()
@@ -41,7 +42,5 @@ class ThemeLoader {
         this.themeUpdated = true
     }
 }
-
-Object.assign(ThemeLoader.prototype, Object.create(THREE.Loader.prototype).__proto__)
 
 export default ThemeLoader

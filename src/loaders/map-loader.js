@@ -1,9 +1,9 @@
 import THREE from '../libs/threejs/index'
 import Building from '../model/building'
 
-class MapLoader {
+class MapLoader extends THREE.Loader {
     constructor(is3d) {
-        THREE.Loader.call(this, is3d)
+        super()
 
         this.withCredentials = false
         this.is3d = is3d
@@ -28,7 +28,5 @@ class MapLoader {
         return new Building(json.data)
     }
 }
-
-Object.assign(MapLoader.prototype, Object.create(THREE.Loader.prototype).__proto__)
 
 export default MapLoader

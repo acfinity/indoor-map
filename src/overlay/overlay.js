@@ -1,4 +1,3 @@
-import THREE from '../libs/threejs/index'
 import { eventMixin } from '../core/event'
 
 class Overlay {
@@ -24,7 +23,6 @@ class Overlay {
     }
 }
 
-Object.assign(Overlay.prototype, THREE.EventDispatcher.prototype)
 eventMixin(Overlay)
 
 Object.defineProperties(Overlay.prototype, {

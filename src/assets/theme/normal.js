@@ -1,5 +1,6 @@
 export default {
     name: 'test',
+    background: '#f9f9f9',
     building: {
         color: '#000000',
         opacity: 0.1,
@@ -24,21 +25,21 @@ export default {
         fontface: 'Helvetica, MicrosoftYaHei ',
     },
     pubPointImg: {
-        '11001': 'img/toilet.png',
-        '11002': 'img/ATM.png',
-        '21001': 'img/stair.png',
-        '21002': 'img/escalator.png',
-        '21003': 'img/lift.png',
-        '22006': 'img/entry.png',
+        '11001': 'img/100001.png',
+        '11002': 'img/150001.png',
+        '21001': 'img/170001.png',
+        '21002': 'img/170003.png',
+        '21003': 'img/170006.png',
+        '22006': 'img/110001.png',
     },
     roomStyle: {
         '101': {
-            color: '#1f77b4',
+            color: '#F8D5D3',
             opacity: 0.7,
             transparent: true,
         },
         '102': {
-            color: '#aec7e8',
+            color: '#F8D2B4',
             opacity: 0.7,
             transparent: true,
         },
@@ -63,7 +64,7 @@ export default {
             transparent: true,
         },
         '107': {
-            color: '#dbdb8d',
+            color: '#E1B4F8',
             opacity: 0.7,
             transparent: true,
         },
@@ -83,12 +84,12 @@ export default {
             transparent: true,
         },
         '400': {
-            color: '#D3D3D3',
+            color: '#E2E0D0',
             opacity: 0.7,
             transparent: true,
         },
         default: {
-            color: '#c49c94',
+            color: '#D6D9F8',
             opacity: 0.4,
             transparent: true,
         },

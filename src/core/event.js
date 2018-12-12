@@ -1,6 +1,7 @@
-import { Vector2, Vector3, Raycaster } from '../libs/threejs/index'
+import { Vector2, Vector3, Raycaster, EventDispatcher } from '../libs/threejs/index'
 
 export function eventMixin(Class) {
+    Object.assign(Class.prototype, EventDispatcher.prototype)
     const eventMap = new Map()
     Object.assign(Class.prototype, {
         on(eventType, fn) {
@@ -32,17 +33,21 @@ export const initEvent = (function() {
     const vector = new Vector3(mouse.x, mouse.y, 0.5)
     // let preHoveredEntity = undefined
     const intersectObjects = function(eventType, mo, e) {
-        if ([...mo._overlays, mo].filter(it => it.hasEventListener(eventType)).length === 0) {
+        if (!mo.building) {
             return
         }
         let point = e.touches ? e.touches[0] : e
-        vector.set((point.pageX / mo.$wrapper.clientWidth) * 2 - 1, -(point.pageY / mo.$wrapper.clientHeight) * 2 + 1, 0.5)
+        vector.set(
+            (point.pageX / mo.$wrapper.clientWidth) * 2 - 1,
+            -(point.pageY / mo.$wrapper.clientHeight) * 2 + 1,
+            0.5
+        )
         raycaster.setFromCamera(vector, mo._camera)
         return raycaster.intersectObjects(
             [...mo._overlays]
                 .filter(it => it.hasEventListener(eventType))
-                .concat(mo.building.floors)
                 .map(it => it.object3D)
+                .concat(mo.building.floors)
                 .filter(it => it.visible),
             true
         )
@@ -58,8 +63,12 @@ export const initEvent = (function() {
                 overlay = intersects[0].object.handler
                 intersects[0].object.handler.dispatchEvent({ type: 'click', message: { overlay, domEvent: e } })
             }
+            intersects
+                .filter(it => it.object.isRoom)
+                .splice(0, 1)
+                .forEach(it => it.object.dispatchEvent({ type: 'click' }))
             if (mo.hasEventListener('click')) {
-                let floor = intersects.filter(it => it.object.name === 'floor')[0]
+                let floor = intersects.filter(it => it.object.isFloor)[0]
                 if (floor) {
                     mo.dispatchEvent({
                         type: 'click',

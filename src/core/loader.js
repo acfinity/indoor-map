@@ -1,15 +1,35 @@
 import MapLoader from '../loaders/map-loader'
 import ThemeLoader from '../loaders/theme-loader'
 
+function changeTheme(mo, theme) {
+    function changeTheme(object) {
+        if (object.onThemeChange) object.onThemeChange(theme)
+        if (object.children && object.children.length > 0) {
+            object.children.forEach(obj => changeTheme(obj))
+        }
+    }
+    changeTheme(mo.building)
+}
+
+function injectMapInstance(mo, object) {
+    if (object.isMapObject) {
+        object.$map = mo
+        if (object.updateScale) object.updateScale()
+    }
+    object.children.forEach(obj => injectMapInstance(mo, obj))
+}
+
 export function loaderMixin(XMap) {
     Object.assign(XMap.prototype, {
         load(fileName) {
             this.mapLoader.load(fileName).then(building => {
                 this.floorControl.show(this.$controlWrapper, building)
                 this.building = building
-                this.renderer.setClearColor('#ffffff')
-                this._scene.add(building.object3D)
-                // building.showAllFloors()
+                changeTheme(this, this.themeLoader.getTheme())
+                injectMapInstance(this, this.building)
+                this.renderer.setClearColor(this.themeLoader.getTheme().background)
+                this._scene.add(building)
+
                 building.showFloor('F1')
                 this.dispatchEvent({ type: 'mapLoaded' })
                 this._overlays.forEach(overlay => this._addOverlay(overlay))

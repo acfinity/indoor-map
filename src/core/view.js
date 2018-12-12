@@ -12,7 +12,7 @@ function changeViewMode(mo, is3dMode) {
             object.children.forEach(obj => changeMode(obj))
         }
     }
-    changeMode(mo.building.object3D)
+    changeMode(mo.building)
 }
 
 export function viewMixin(XMap) {

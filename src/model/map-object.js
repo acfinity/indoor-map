@@ -1,39 +1,23 @@
-import { parsePoints } from '../utils/view'
+import { eventMixin } from '../core/event'
 
-class MapObejct {
-    constructor() {}
-}
-
-Object.assign(MapObejct.prototype, {
-    parsePoints,
-})
-
-export default MapObejct
-
-export const mapObejctMixins = map => {
-    Object.defineProperties(MapObejct.prototype, {
-        map: {
-            enumerable: false,
-            configurable: true,
-            get: function reactiveGetter() {
-                return map
-            },
-        },
-
-        mapStyle: {
-            enumerable: false,
-            configurable: true,
-            get: function reactiveGetter() {
-                return map.getMapStyle()
-            },
-        },
-
+export const mixinMapObject = function(Class) {
+    eventMixin(Class)
+    Object.assign(Class.prototype, {})
+    Object.defineProperties(Class.prototype, {
         canvasScale: {
             enumerable: false,
             configurable: true,
             get: function reactiveGetter() {
-                return map._canvasScale
+                return this.$map ? this.$map._canvasScale : 1
             },
         },
+        isMapObject: {
+            writable: false,
+            value: true,
+        },
+        [`is${Class.name}`]: {
+            writable: false,
+            value: true,
+        }
     })
 }
