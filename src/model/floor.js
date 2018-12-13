@@ -1,10 +1,17 @@
+import {
+    Path,
+    Shape,
+    Mesh,
+    ExtrudeBufferGeometry,
+    ShapeGeometry,
+    MeshPhongMaterial,
+} from '../libs/threejs/three.module'
 import { mixinMapObject } from './map-object'
 import Room from './room'
 import PubPoint from './pub-point'
-import THREE from '../libs/threejs/index'
 import { parsePoints } from '../utils/view'
 
-class Floor extends THREE.Mesh {
+class Floor extends Mesh {
     constructor(attr) {
         super()
         this.info = attr
@@ -14,19 +21,19 @@ class Floor extends THREE.Mesh {
             depth: 10,
             bevelEnabled: false,
         }
-        let shape = new THREE.Shape(points)
+        let shape = new Shape(points)
         if (this.info.outline[1]) {
             this.info.outline[1].map(array => {
-                shape.holes.push(new THREE.Path(parsePoints(array)))
+                shape.holes.push(new Path(parsePoints(array)))
             })
         }
 
-        let geometry3d = new THREE.ExtrudeBufferGeometry(shape, extrudeSettings)
-        let geometry2d = new THREE.ShapeGeometry(shape)
+        let geometry3d = new ExtrudeBufferGeometry(shape, extrudeSettings)
+        let geometry2d = new ShapeGeometry(shape)
         this.geometry = geometry2d
-        let board = new THREE.Mesh(geometry3d)
+        let board = new Mesh(geometry3d)
         this.onThemeChange = theme => {
-            this.material = new THREE.MeshPhongMaterial(theme.floor)
+            this.material = new MeshPhongMaterial(theme.floor)
             board.material = this.material
         }
         this.add(board)
@@ -71,6 +78,6 @@ class Floor extends THREE.Mesh {
     }
 }
 
-mixinMapObject(Floor)
+mixinMapObject(Floor, 'Floor')
 
 export default Floor

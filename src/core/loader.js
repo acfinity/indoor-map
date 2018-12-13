@@ -8,7 +8,7 @@ function changeTheme(mo, theme) {
             object.children.forEach(obj => changeTheme(obj))
         }
     }
-    changeTheme(mo.building)
+    mo.building && changeTheme(mo.building)
 }
 
 function injectMapInstance(mo, object) {
@@ -23,9 +23,9 @@ export function loaderMixin(XMap) {
     Object.assign(XMap.prototype, {
         load(fileName) {
             this.mapLoader.load(fileName).then(building => {
-                this.floorControl.show(this.$controlWrapper, building)
+                this.floorControl.show(building)
                 this.building = building
-                changeTheme(this, this.themeLoader.getTheme())
+                changeTheme(this, this.themeLoader.getTheme(this._currentTheme))
                 injectMapInstance(this, this.building)
                 this.renderer.setClearColor(this.themeLoader.getTheme().background)
                 this._scene.add(building)
@@ -45,7 +45,18 @@ export function loaderMixin(XMap) {
             })
         },
 
-        loadTheme() {},
+        loadTheme(name, url) {
+            return this.themeLoader.load(name, url)
+        },
+
+        setTheme(name) {
+            let theme = this.themeLoader.getTheme(name)
+            if (!theme) {
+                throw new Error('theme not exists')
+            }
+            this._currentTheme = name
+            changeTheme(this, theme)
+        },
 
         getMapStyle() {
             return this.themeLoader.getTheme()

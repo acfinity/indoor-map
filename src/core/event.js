@@ -1,4 +1,4 @@
-import { Vector2, Vector3, Raycaster, EventDispatcher } from '../libs/threejs/index'
+import { Vector2, Vector3, Raycaster, EventDispatcher } from '../libs/threejs/three.module'
 
 export function eventMixin(Class) {
     Object.assign(Class.prototype, EventDispatcher.prototype)

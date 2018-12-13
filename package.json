@@ -5,7 +5,7 @@
   "main": "index.js",
   "scripts": {
     "build": "rollup -c",
-    "build-closure": "cross-env BUILD_MODE=closure rollup -c && java -jar node_modules/google-closure-compiler-java/compiler.jar --warning_level=VERBOSE --jscomp_off=globalThis --jscomp_off=checkTypes --externs utils/build/externs.js --language_in=ECMASCRIPT_2018 --js build/xmap.js --js_output_file build/xmap.min.js",
+    "build-closure": "cross-env BUILD_MODE=closure rollup -c",
     "build-test": "webpack --config scripts/webpack.prod.config.js --mode production",
     "build-github": "webpack --config scripts/webpack.prod.config.js --mode production",
     "test": "echo \"Error: no test specified\" && exit 1",

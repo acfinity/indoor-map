@@ -1,9 +1,7 @@
 .imap-controls, .imap-overlays {
-    position: absolute;
+    position: static;
     top: 0;
     left: 0;
-    width: -webkit-fill-available;
-    height: -webkit-fill-available;
     pointer-events: none;
     overflow: hidden;
 }
@@ -27,9 +25,9 @@
 
 .imap-floor-control li {
     list-style: none;
-    line-height: 25px;
-    width: 25px;
-    height: 25px;
+    line-height: 40px;
+    width: 40px;
+    height: 40px;
     border-bottom: solid 1px #dfdfdf;
 }
 

@@ -1,5 +1,14 @@
+import {
+    Vector3,
+    Vector4,
+    Matrix4,
+    Scene,
+    PerspectiveCamera,
+    WebGLRenderer,
+    AmbientLight,
+    DirectionalLight,
+} from '../libs/threejs/three.module'
 import { ViewMode } from '../constants'
-import THREE from '../libs/threejs/index'
 import { addEvent } from '../utils/event'
 
 const PERSPECTIVE_FOV = 20
@@ -39,15 +48,14 @@ export function viewMixin(XMap) {
         },
 
         locationToViewport: (function() {
-            const worldPosition = new THREE.Vector3()
-            const screenPosition = new THREE.Vector4()
+            const worldPosition = new Vector3()
+            const screenPosition = new Vector4()
             return function parseLocation(location) {
                 worldPosition.copy(location)
                 let floor = this.building.getFloor(location.floor)
                 if (!floor) {
                     throw new Error('invalid floor')
                 }
-                floor = floor.object3D
                 if (!floor.visible) {
                     return {
                         x: -Infinity,
@@ -73,7 +81,7 @@ export function viewMixin(XMap) {
     Object.defineProperties(XMap.prototype, {
         viewportMatrix: {
             writable: false,
-            value: new THREE.Matrix4(),
+            value: new Matrix4(),
         },
     })
 }
@@ -99,23 +107,23 @@ function initThree(mo) {
         height = mo.$wrapper.clientHeight
     mo._canvasScale = Math.round(height / Math.sin((PERSPECTIVE_FOV / 180) * Math.PI))
 
-    mo._scene = new THREE.Scene()
-    mo._camera = new THREE.PerspectiveCamera(PERSPECTIVE_FOV, width / height, 140, 100000)
+    mo._scene = new Scene()
+    mo._camera = new PerspectiveCamera(PERSPECTIVE_FOV, width / height, 140, 100000)
 
     //set up the lights
-    let light = new THREE.AmbientLight(0x747474)
+    let light = new AmbientLight(0x747474)
     mo._scene.add(light)
 
-    light = new THREE.DirectionalLight(0xadadad, 1.2)
+    light = new DirectionalLight(0xadadad, 1.2)
     light.position.set(4000, 4000, 4000).normalize()
     light.target.position.set(0, 0, 0)
     mo._scene.add(light)
 
-    light = new THREE.DirectionalLight(0x333333)
+    light = new DirectionalLight(0x333333)
     light.position.set(-4000, 2000, -4000).normalize()
     mo._scene.add(light)
 
-    mo.renderer = new THREE.WebGLRenderer({
+    mo.renderer = new WebGLRenderer({
         antialias: true,
     })
     mo.renderer.autoClear = false

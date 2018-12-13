@@ -1,5 +1,5 @@
 import { addEvent, removeEvent } from '../utils/event'
-import THREE from '../libs/threejs/index'
+import { Vector2, Vector3, Matrix4, Plane, Raycaster, EventDispatcher } from '../libs/threejs/three.module'
 
 const STATE = {
     NONE: -1,
@@ -163,13 +163,13 @@ class OrbitControl {
     }
 
     _initVars() {
-        this.startPosition = new THREE.Vector2()
-        this.endPosition = new THREE.Vector2()
-        this.deltaVector = new THREE.Vector2()
-        this.touchStartPoints = [new THREE.Vector2(), new THREE.Vector2(), new THREE.Vector2()]
-        this.touchEndPoints = [new THREE.Vector2(), new THREE.Vector2(), new THREE.Vector2()]
+        this.startPosition = new Vector2()
+        this.endPosition = new Vector2()
+        this.deltaVector = new Vector2()
+        this.touchStartPoints = [new Vector2(), new Vector2(), new Vector2()]
+        this.touchEndPoints = [new Vector2(), new Vector2(), new Vector2()]
 
-        this.cameraInverseMatrix = new THREE.Matrix4()
+        this.cameraInverseMatrix = new Matrix4()
 
         this.phiDelta = 0
         this.thetaDelta = 0
@@ -178,9 +178,9 @@ class OrbitControl {
 
         this.state = STATE.NONE
 
-        this.lastPosition = new THREE.Vector3()
+        this.lastPosition = new Vector3()
 
-        this.center = new THREE.Vector3()
+        this.center = new Vector3()
     }
 
     _initListeners(remove) {
@@ -347,18 +347,18 @@ class OrbitControl {
     }
 }
 
-Object.assign(OrbitControl.prototype, Object.create(THREE.EventDispatcher.prototype))
+Object.assign(OrbitControl.prototype, Object.create(EventDispatcher.prototype))
 Object.assign(OrbitControl.prototype, {
     viewToWorld: (function() {
-        const raycaster = new THREE.Raycaster()
-        const vector = new THREE.Vector3(0, 0, 0.5)
-        const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0)
+        const raycaster = new Raycaster()
+        const vector = new Vector3(0, 0, 0.5)
+        const plane = new Plane(new Vector3(0, 1, 0), 0)
 
         return function(point) {
             vector.x = (point.x / this.wrapper.clientWidth) * 2 - 1
             vector.y = -(point.y / this.wrapper.clientHeight) * 2 + 1
             raycaster.setFromCamera(vector, this.camera)
-            let result = new THREE.Vector3()
+            let result = new Vector3()
             raycaster.ray.intersectPlane(plane, result)
             return result
         }

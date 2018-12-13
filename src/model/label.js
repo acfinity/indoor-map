@@ -1,71 +1,99 @@
-import {
-    Vector2,
-    Vector3,
-    Vector4,
-    Matrix4,
-    Box2,
-    Texture,
-    Sprite,
-    SpriteMaterial,
-    LinearFilter,
-} from '../libs/threejs/index'
+import { Vector2, Vector3, Vector4, Matrix4, Box2, Sprite } from '../libs/threejs/three.module'
+import SpriteCanvasMaterial from '../libs/threejs/materials/SpriteCanvasMaterial'
 import { mixinMapObject } from './map-object'
+
+function getValue(value) {
+    return typeof value === 'function' ? value() : value
+}
+
+const defaultIconSize = new Vector2(15, 15)
+const __needsUpdate__ = new Map()
 
 class Label extends Sprite {
     constructor(text, options = {}) {
-        let canvas = document.createElement('canvas')
-        let texture = new Texture(canvas)
-        texture.minFilter = LinearFilter
-        let spriteMaterial = new SpriteMaterial({
-            map: texture,
-            sizeAttenuation: false,
-            transparent: true,
-            alphaTest: 0.1,
-        })
-
-        super(spriteMaterial)
-
+        super()
+        this.text = text
         this.options = options
-        this.texture = texture
-        this.canvas = canvas
+
+        this._initMaterial_()
 
         this.type = 'Label'
         this.boundBox = new Box2()
-        this.worldScale = new Vector3()
-
-        this.setText(text)
     }
 
     setText(text) {
         this.text = text
-        let fontface = this.options['fontface'] || 'sans-serif'
+    }
+
+    _initMaterial_() {
+        let icon, iconPosition, iconSize
+        let fontface = this.options.fontsize || 'sans-serif'
         let fontsize = this.options.fontsize || 16
         let color = this.options.color || 'rgba(0,0,0,1)'
+        this.material = new SpriteCanvasMaterial({
+            measure: context => {
+                context.font = fontsize + 'px ' + fontface
+                let metrics = context.measureText(this.text)
+                let width = metrics.width || 1
+                let height = fontsize * 1.2
+                if (this.options.icon) {
+                    icon = getValue(this.options.icon)
+                    iconPosition = getValue(this.options.iconPosition) || 'left'
+                    iconSize = getValue(this.options.iconSize) || defaultIconSize
+                    if (iconPosition == 'top') {
+                        height += iconSize.height
+                    } else {
+                        width += iconSize.width + 2
+                    }
+                } else {
+                    icon = null
+                }
+                return { width, height }
+            },
+            compile: context => {
+                let offsetX = 0,
+                    offsetY = 0
+                if (icon) {
+                    if (iconPosition == 'top') {
+                        offsetY = iconSize.height
+                        context.drawImage(icon, (this.width - iconSize.width) / 2, 0, iconSize.width, iconSize.height)
+                    } else {
+                        offsetX = iconSize.width + 2
+                        context.drawImage(icon, 0, (this.height - iconSize.height) / 2, iconSize.width, iconSize.height)
+                    }
+                }
+                context.font = fontsize + 'px ' + fontface
+                context.fillStyle = color
+                context.strokeStyle = '#ffffff'
+                context.lineWidth = 2
+                context.strokeText(this.text, offsetX, fontsize + offsetY)
+                context.fillText(this.text, offsetX, fontsize + offsetY)
+            },
+        })
+    }
 
-        let canvas = this.canvas
-        canvas.width = 512
-        let context = canvas.getContext('2d')
-        context.font = fontsize + 'px ' + fontface
-        let metrics = context.measureText(this.text)
-        canvas.width = Math.ceil(metrics.width) || 1
-        canvas.height = Math.ceil(fontsize * 1.44)
-        context = canvas.getContext('2d')
-        context.font = fontsize + 'px ' + fontface
+    _updateMaterial_() {
+        this.material.needsUpdate = true
+        this.scale.set(this.width / this.canvasScale, this.height / this.canvasScale, 1)
+    }
 
-        // text color
-        context.fillStyle = color
+    set needsUpdate(value) {
+        __needsUpdate__.set(this, value)
+        if (value && this.material) {
+            this._updateMaterial_()
+        }
+    }
 
-        context.strokeStyle = '#ffffff'
-        context.lineWidth = 2
-        context.strokeText(this.text, 0, fontsize)
-        context.fillText(this.text, 0, fontsize)
+    get needsUpdate() {
+        return __needsUpdate__.get(this)
+    }
 
-        this.texture.needsUpdate = true
+    get width() {
+        return this.material.width
+    }
 
-        this.originScale = this.scale.clone()
-        this.width = canvas.width
-        this.height = canvas.height
-        return
+    get height() {
+        return this.material.height
     }
 }
 
@@ -134,5 +162,7 @@ Object.assign(Sprite.prototype, {
     },
 })
 mixinMapObject(Sprite)
+
+mixinMapObject(Label, 'Label')
 
 export default Label

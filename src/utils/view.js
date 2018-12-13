@@ -1,9 +1,9 @@
-import THREE from '../libs/threejs/index'
+import { Vector2 } from '../libs/threejs/three.module'
 
 export const parsePoints = array => {
     var points = []
     for (var i = 0; i < array.length; i += 2) {
-        var point = new THREE.Vector2(array[i], array[i + 1])
+        var point = new Vector2(array[i], array[i + 1])
         if (i > 0) {
             if (points[points.length - 1].manhattanDistanceTo(point) > 1e-4) {
                 points.push(point)
@@ -13,29 +13,6 @@ export const parsePoints = array => {
         }
     }
     return points
-}
-
-export const compileTemplate = template => {
-    const evalExpr = /<%=(.+?)%>/g
-    const expr = /<%([\s\S]+?)%>/g
-
-    /**
-     * @prettier --print-width=80
-     */
-    template = template.replace(evalExpr, '`); \n  echo( $1 ); \n  echo(`').replace(expr, '`); \n $1 \n  echo(`')
-
-    template = 'echo(`' + template + '`);'
-
-    let script = `(function parse(data){
-      let output = "";
-      function echo(html){
-        output += html;
-      }
-      ${template}
-      return output;
-    })`
-
-    return eval(script)
 }
 
 export const appendHTML = function(element, html) {

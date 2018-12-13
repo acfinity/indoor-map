@@ -31,9 +31,12 @@ export function overlayMixin(XMap) {
                     this.$overlayWrapper.appendChild(overlay.$el)
                     overlay.render(this.locationToViewport(overlay.location))
                 } else {
-                    let floorObj = this.building.getFloor(overlay.floor).object3D
-                    floorObj.add(overlay.object3D)
-                    overlay.onAppend && overlay.onAppend(floorObj)
+                    let floorObj = this.building.getFloor(overlay.floor)
+                    if (floorObj) {
+                        floorObj.add(overlay.object3D)
+                    } else {
+                        throw new Error('invalid floor')
+                    }
                 }
             }
         },

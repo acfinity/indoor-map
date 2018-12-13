@@ -10,7 +10,7 @@ module.exports = {
         ecmaVersion: 2018,
         sourceType: 'module',
     },
-    plugins: ['prettier'],
+    // plugins: ['prettier'],
     rules: {
         indent: ['error', 4, { SwitchCase: 1 }],
         'linebreak-style': [0, 'error', 'windows'],

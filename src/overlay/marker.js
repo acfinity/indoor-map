@@ -1,7 +1,7 @@
+import { Vector2, Sprite, SpriteMaterial, TextureLoader, LinearFilter } from '../libs/threejs/three.module'
 import Overlay from './overlay'
-import THREE from '../libs/threejs/index'
 
-const PUB_POINT_SIZE = new THREE.Vector2(20, 20)
+const PUB_POINT_SIZE = new Vector2(20, 20)
 
 class Marker extends Overlay {
     constructor(location, options = {}) {
@@ -19,11 +19,11 @@ class Marker extends Overlay {
     makeObject3D() {
         let { icon } = this.options
 
-        this.texture = new THREE.TextureLoader().load(icon, t => {
+        this.texture = new TextureLoader().load(icon, t => {
             t.needsUpdate = true
         })
-        this.texture.minFilter = THREE.LinearFilter
-        this.material = new THREE.SpriteMaterial({
+        this.texture.minFilter = LinearFilter
+        this.material = new SpriteMaterial({
             map: this.texture,
             sizeAttenuation: false,
             transparent: true,
@@ -31,8 +31,14 @@ class Marker extends Overlay {
             depthTest: false,
         })
 
-        let sprite = new THREE.Sprite(this.material)
-        let size = this.options.size || PUB_POINT_SIZE
+        let sprite = new Sprite(this.material)
+        let size = PUB_POINT_SIZE
+        if (typeof this.options.size === 'number' || typeof this.options.size === 'string') {
+            size = Number(this.options.size)
+            size = new Vector2(size, size)
+        } else if (this.options.size && this.options.size.width > 0) {
+            size = this.options.size
+        }
         let align = this.options.align || 'CENTER'
         sprite.width = size.width
         sprite.height = size.height

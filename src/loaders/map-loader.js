@@ -1,14 +1,14 @@
-import THREE from '../libs/threejs/index'
+import { Loader, FileLoader } from '../libs/threejs/three.module'
 import Building from '../model/building'
 
-class MapLoader extends THREE.Loader {
+class MapLoader extends Loader {
     constructor(is3d) {
         super()
 
         this.withCredentials = false
         this.is3d = is3d
 
-        this.jsonLoader = new THREE.FileLoader()
+        this.jsonLoader = new FileLoader()
     }
 
     load(url) {
@@ -17,6 +17,7 @@ class MapLoader extends THREE.Loader {
                 url,
                 json => {
                     let data = JSON.parse(json)
+                    window.building = data
                     resolve(this.parse(data))
                 },
                 undefined,

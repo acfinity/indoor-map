@@ -1,14 +1,4 @@
 import BaseControl from './base-control'
-import { compileTemplate, appendHTML } from '../utils/view'
-
-const TEMPLATE = `
-<ul class='imap-floor-control'>
-  <% for(let i=0; i < data.length; i++) { %>
-    <li><%= data[i] %></li>
-  <% } %>
-</ul>
-`
-const context = compileTemplate(TEMPLATE)
 
 class FloorControl extends BaseControl {
     constructor(mo) {
@@ -16,19 +6,34 @@ class FloorControl extends BaseControl {
 
         this.map = mo
         this.camera = mo._camera
-        this.wrapper = mo.$controlWrapper
+        this.$el = document.createElement('ul')
+        this.$el.classList = ['imap-floor-control']
+        this.$el.style.display = 'none'
+
+        mo.$controlWrapper.appendChild(this.$el)
     }
 
-    show(wrapper, building) {
+    show(building) {
         this.building = building
 
         const floors = new Map(building.floors.map(f => [f.info.name, f]))
         if (floors.size < 2) {
+            this.$el.style.display = 'none'
             return
         }
-        appendHTML(wrapper, context(['All', ...building.floors.map(f => f.name).reverse()]))
-        let elements = [...wrapper.getElementsByTagName('li')]
-        elements.forEach(ele => ele.addEventListener('click', () => this.showFloor(floors.get(ele.innerHTML))))
+        while (this.$el.lastChild) this.$el.removeChild(this.$el.lastChild)
+
+        building.floors
+            .map(f => f.name)
+            .concat('All')
+            .reverse()
+            .forEach(it => {
+                let li = document.createElement('li')
+                li.appendChild(document.createTextNode(it))
+                li.addEventListener('click', () => this.showFloor(floors.get(li.innerHTML)))
+                this.$el.appendChild(li)
+            })
+        this.$el.style.display = 'block'
     }
 
     showFloor(floor) {

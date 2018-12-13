@@ -1,6 +1,6 @@
 import { eventMixin } from '../core/event'
 
-export const mixinMapObject = function(Class) {
+export const mixinMapObject = function(Class, type) {
     eventMixin(Class)
     Object.assign(Class.prototype, {})
     Object.defineProperties(Class.prototype, {
@@ -15,9 +15,13 @@ export const mixinMapObject = function(Class) {
             writable: false,
             value: true,
         },
-        [`is${Class.name}`]: {
-            writable: false,
-            value: true,
-        }
     })
+    if (type) {
+        Object.defineProperties(Class.prototype, {
+            [`is${type}`]: {
+                writable: false,
+                value: true,
+            },
+        })
+    }
 }

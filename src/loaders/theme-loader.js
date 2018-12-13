@@ -1,22 +1,37 @@
-import THREE from '../libs/threejs/index'
+import { Loader, FileLoader, TextureLoader, LinearFilter, SpriteMaterial } from '../libs/threejs/three.module'
 import themeNormal from '../assets/theme/normal'
 
-class ThemeLoader extends THREE.Loader {
+class ThemeLoader extends Loader {
     constructor() {
         super()
-        this.jsonLoader = new THREE.FileLoader()
-        this.textureLoader = new THREE.TextureLoader()
+        this.jsonLoader = new FileLoader()
+        this.textureLoader = new TextureLoader()
         this.themeMap = new Map()
 
         this._loadTheme('normal', themeNormal)
     }
 
     load(name, url) {
-        this.jsonLoader.load(url, json => this._loadTheme(name, json), undefined, e => console.error(e))
+        return new Promise((resolve, reject) => {
+            if (this.themeMap.has(name)) {
+                reject(new Error('duplicate theme name'))
+                return
+            }
+            this.jsonLoader.load(
+                url,
+                json => {
+                    resolve(this._loadTheme(name, json))
+                },
+                undefined,
+                e => {
+                    reject(e)
+                }
+            )
+        })
     }
 
     getTheme(name = 'normal') {
-        return this.themeMap.get(name) || this.themeMap.get('normal')
+        return this.themeMap.get(name)
     }
 
     _loadTheme(name, theme) {
@@ -29,8 +44,8 @@ class ThemeLoader extends THREE.Loader {
                     t.needsUpdate = true
                     this.textureUpdated = true
                 })
-                texture.minFilter = THREE.LinearFilter
-                let material = new THREE.SpriteMaterial({
+                texture.minFilter = LinearFilter
+                let material = new SpriteMaterial({
                     map: texture,
                     sizeAttenuation: false,
                     transparent: true,
@@ -39,7 +54,7 @@ class ThemeLoader extends THREE.Loader {
                 theme.materialMap.set(k, material)
             })
         }
-        this.themeUpdated = true
+        return theme
     }
 }
 

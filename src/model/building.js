@@ -1,9 +1,9 @@
+import { Vector3, Shape, Group, Mesh, ExtrudeGeometry, MeshBasicMaterial } from '../libs/threejs/three.module'
 import { mixinMapObject } from './map-object'
 import Floor from './floor'
-import THREE from '../libs/threejs/index'
 import { parsePoints } from '../utils/view'
 
-class Building extends THREE.Group {
+class Building extends Group {
     constructor(attr = {}) {
         super()
         let {
@@ -56,15 +56,15 @@ class Building extends THREE.Group {
 
         let points = parsePoints(this.info.outline[0][0])
         if (points.length > 0) {
-            let shape = new THREE.Shape(points)
+            let shape = new Shape(points)
             let extrudeSettings = {
                 depth: object.children.map(a => a.height).reduce((a, b) => a + b) * 4,
                 bevelEnabled: false,
             }
-            let geometry = new THREE.ExtrudeGeometry(shape, extrudeSettings)
-            let mesh = new THREE.Mesh(geometry)
+            let geometry = new ExtrudeGeometry(shape, extrudeSettings)
+            let mesh = new Mesh(geometry)
             mesh.onThemeChange = theme => {
-                mesh.material = new THREE.MeshBasicMaterial(theme.building)
+                mesh.material = new MeshBasicMaterial(theme.building)
                 mesh.material.depthTest = false
             }
             mesh.material.depthTest = false
@@ -72,7 +72,7 @@ class Building extends THREE.Group {
             // object.add(mesh)
         }
 
-        object.rotateOnAxis(new THREE.Vector3(1, 0, 0), -Math.PI / 2)
+        object.rotateOnAxis(new Vector3(1, 0, 0), -Math.PI / 2)
     }
 
     updateBound(map) {
@@ -134,6 +134,6 @@ class Building extends THREE.Group {
     }
 }
 
-mixinMapObject(Building)
+mixinMapObject(Building, 'Building')
 
 export default Building

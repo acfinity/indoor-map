@@ -180,21 +180,15 @@ Object.assign( EventDispatcher.prototype, {
 } );
 
 var REVISION = '99dev';
-var MOUSE = { LEFT: 0, MIDDLE: 1, RIGHT: 2 };
 var CullFaceNone = 0;
 var CullFaceBack = 1;
 var CullFaceFront = 2;
-var CullFaceFrontBack = 3;
-var FrontFaceDirectionCW = 0;
-var FrontFaceDirectionCCW = 1;
-var BasicShadowMap = 0;
 var PCFShadowMap = 1;
 var PCFSoftShadowMap = 2;
 var FrontSide = 0;
 var BackSide = 1;
 var DoubleSide = 2;
 var FlatShading = 1;
-var SmoothShading = 2;
 var NoColors = 0;
 var FaceColors = 1;
 var VertexColors = 2;
@@ -272,7 +266,6 @@ var RGBFormat = 1022;
 var RGBAFormat = 1023;
 var LuminanceFormat = 1024;
 var LuminanceAlphaFormat = 1025;
-var RGBEFormat = RGBAFormat;
 var DepthFormat = 1026;
 var DepthStencilFormat = 1027;
 var RedFormat = 1028;
@@ -315,7 +308,6 @@ var LinearEncoding = 3000;
 var sRGBEncoding = 3001;
 var GammaEncoding = 3007;
 var RGBEEncoding = 3002;
-var LogLuvEncoding = 3003;
 var RGBM7Encoding = 3004;
 var RGBM16Encoding = 3005;
 var RGBDEncoding = 3006;
@@ -6407,10 +6399,6 @@ function mergeUniforms( uniforms ) {
 	return merged;
 
 }
-
-// Legacy
-
-var UniformsUtils = { clone: cloneUniforms, merge: mergeUniforms };
 
 /**
  * @author mrdoob / http://mrdoob.com/
@@ -38502,112 +38490,6 @@ var TEXTURE_FILTER = {
 };
 
 /**
- * @author thespite / http://clicktorelease.com/
- */
-
-
-function ImageBitmapLoader( manager ) {
-
-	if ( typeof createImageBitmap === 'undefined' ) {
-
-		console.warn( 'THREE.ImageBitmapLoader: createImageBitmap() not supported.' );
-
-	}
-
-	if ( typeof fetch === 'undefined' ) {
-
-		console.warn( 'THREE.ImageBitmapLoader: fetch() not supported.' );
-
-	}
-
-	this.manager = manager !== undefined ? manager : DefaultLoadingManager;
-	this.options = undefined;
-
-}
-
-ImageBitmapLoader.prototype = {
-
-	constructor: ImageBitmapLoader,
-
-	setOptions: function setOptions( options ) {
-
-		this.options = options;
-
-		return this;
-
-	},
-
-	load: function ( url, onLoad, onProgress, onError ) {
-
-		if ( url === undefined ) url = '';
-
-		if ( this.path !== undefined ) url = this.path + url;
-
-		url = this.manager.resolveURL( url );
-
-		var scope = this;
-
-		var cached = Cache.get( url );
-
-		if ( cached !== undefined ) {
-
-			scope.manager.itemStart( url );
-
-			setTimeout( function () {
-
-				if ( onLoad ) onLoad( cached );
-
-				scope.manager.itemEnd( url );
-
-			}, 0 );
-
-			return cached;
-
-		}
-
-		fetch( url ).then( function ( res ) {
-
-			return res.blob();
-
-		} ).then( function ( blob ) {
-
-			return createImageBitmap( blob, scope.options );
-
-		} ).then( function ( imageBitmap ) {
-
-			Cache.add( url, imageBitmap );
-
-			if ( onLoad ) onLoad( imageBitmap );
-
-			scope.manager.itemEnd( url );
-
-		} ).catch( function ( e ) {
-
-			if ( onError ) onError( e );
-
-			scope.manager.itemError( url );
-			scope.manager.itemEnd( url );
-
-		} );
-
-	},
-
-	setCrossOrigin: function ( /* value */ ) {
-
-		return this;
-
-	},
-
-	setPath: function ( value ) {
-
-		this.path = value;
-		return this;
-
-	}
-
-};
-
-/**
  * @author zz85 / http://www.lab4games.net/zz85/blog
  * minimal class for proxing functions to Path. Replaces old "extractSubpaths()"
  **/
@@ -45411,165 +45293,6 @@ function AxesHelper( size ) {
 AxesHelper.prototype = Object.create( LineSegments.prototype );
 AxesHelper.prototype.constructor = AxesHelper;
 
-/**
- * @author mrdoob / http://mrdoob.com/
- */
-
-function Face4( a, b, c, d, normal, color, materialIndex ) {
-
-	console.warn( 'THREE.Face4 has been removed. A THREE.Face3 will be created instead.' );
-	return new Face3( a, b, c, normal, color, materialIndex );
-
-}
-
-var LineStrip = 0;
-
-var LinePieces = 1;
-
-function MeshFaceMaterial( materials ) {
-
-	console.warn( 'THREE.MeshFaceMaterial has been removed. Use an Array instead.' );
-	return materials;
-
-}
-
-function MultiMaterial( materials ) {
-
-	if ( materials === undefined ) materials = [];
-
-	console.warn( 'THREE.MultiMaterial has been removed. Use an Array instead.' );
-	materials.isMultiMaterial = true;
-	materials.materials = materials;
-	materials.clone = function () {
-
-		return materials.slice();
-
-	};
-	return materials;
-
-}
-
-function PointCloud( geometry, material ) {
-
-	console.warn( 'THREE.PointCloud has been renamed to THREE.Points.' );
-	return new Points( geometry, material );
-
-}
-
-function Particle( material ) {
-
-	console.warn( 'THREE.Particle has been renamed to THREE.Sprite.' );
-	return new Sprite( material );
-
-}
-
-function ParticleSystem( geometry, material ) {
-
-	console.warn( 'THREE.ParticleSystem has been renamed to THREE.Points.' );
-	return new Points( geometry, material );
-
-}
-
-function PointCloudMaterial( parameters ) {
-
-	console.warn( 'THREE.PointCloudMaterial has been renamed to THREE.PointsMaterial.' );
-	return new PointsMaterial( parameters );
-
-}
-
-function ParticleBasicMaterial( parameters ) {
-
-	console.warn( 'THREE.ParticleBasicMaterial has been renamed to THREE.PointsMaterial.' );
-	return new PointsMaterial( parameters );
-
-}
-
-function ParticleSystemMaterial( parameters ) {
-
-	console.warn( 'THREE.ParticleSystemMaterial has been renamed to THREE.PointsMaterial.' );
-	return new PointsMaterial( parameters );
-
-}
-
-function Vertex( x, y, z ) {
-
-	console.warn( 'THREE.Vertex has been removed. Use THREE.Vector3 instead.' );
-	return new Vector3( x, y, z );
-
-}
-
-//
-
-function DynamicBufferAttribute( array, itemSize ) {
-
-	console.warn( 'THREE.DynamicBufferAttribute has been removed. Use new THREE.BufferAttribute().setDynamic( true ) instead.' );
-	return new BufferAttribute( array, itemSize ).setDynamic( true );
-
-}
-
-function Int8Attribute( array, itemSize ) {
-
-	console.warn( 'THREE.Int8Attribute has been removed. Use new THREE.Int8BufferAttribute() instead.' );
-	return new Int8BufferAttribute( array, itemSize );
-
-}
-
-function Uint8Attribute( array, itemSize ) {
-
-	console.warn( 'THREE.Uint8Attribute has been removed. Use new THREE.Uint8BufferAttribute() instead.' );
-	return new Uint8BufferAttribute( array, itemSize );
-
-}
-
-function Uint8ClampedAttribute( array, itemSize ) {
-
-	console.warn( 'THREE.Uint8ClampedAttribute has been removed. Use new THREE.Uint8ClampedBufferAttribute() instead.' );
-	return new Uint8ClampedBufferAttribute( array, itemSize );
-
-}
-
-function Int16Attribute( array, itemSize ) {
-
-	console.warn( 'THREE.Int16Attribute has been removed. Use new THREE.Int16BufferAttribute() instead.' );
-	return new Int16BufferAttribute( array, itemSize );
-
-}
-
-function Uint16Attribute( array, itemSize ) {
-
-	console.warn( 'THREE.Uint16Attribute has been removed. Use new THREE.Uint16BufferAttribute() instead.' );
-	return new Uint16BufferAttribute( array, itemSize );
-
-}
-
-function Int32Attribute( array, itemSize ) {
-
-	console.warn( 'THREE.Int32Attribute has been removed. Use new THREE.Int32BufferAttribute() instead.' );
-	return new Int32BufferAttribute( array, itemSize );
-
-}
-
-function Uint32Attribute( array, itemSize ) {
-
-	console.warn( 'THREE.Uint32Attribute has been removed. Use new THREE.Uint32BufferAttribute() instead.' );
-	return new Uint32BufferAttribute( array, itemSize );
-
-}
-
-function Float32Attribute( array, itemSize ) {
-
-	console.warn( 'THREE.Float32Attribute has been removed. Use new THREE.Float32BufferAttribute() instead.' );
-	return new Float32BufferAttribute( array, itemSize );
-
-}
-
-function Float64Attribute( array, itemSize ) {
-
-	console.warn( 'THREE.Float64Attribute has been removed. Use new THREE.Float64BufferAttribute() instead.' );
-	return new Float64BufferAttribute( array, itemSize );
-
-}
-
 //
 
 Curve.create = function ( construct, getPoint ) {
@@ -45644,33 +45367,6 @@ Object.assign( Path.prototype, {
 
 //
 
-function ClosedSplineCurve3( points ) {
-
-	console.warn( 'THREE.ClosedSplineCurve3 has been deprecated. Use THREE.CatmullRomCurve3 instead.' );
-
-	CatmullRomCurve3.call( this, points );
-	this.type = 'catmullrom';
-	this.closed = true;
-
-}
-
-ClosedSplineCurve3.prototype = Object.create( CatmullRomCurve3.prototype );
-
-//
-
-function SplineCurve3( points ) {
-
-	console.warn( 'THREE.SplineCurve3 has been deprecated. Use THREE.CatmullRomCurve3 instead.' );
-
-	CatmullRomCurve3.call( this, points );
-	this.type = 'catmullrom';
-
-}
-
-SplineCurve3.prototype = Object.create( CatmullRomCurve3.prototype );
-
-//
-
 function Spline( points ) {
 
 	console.warn( 'THREE.Spline has been removed. Use THREE.CatmullRomCurve3 instead.' );
@@ -45702,29 +45398,6 @@ Object.assign( Spline.prototype, {
 
 } );
 
-//
-
-function AxisHelper( size ) {
-
-	console.warn( 'THREE.AxisHelper has been renamed to THREE.AxesHelper.' );
-	return new AxesHelper( size );
-
-}
-
-function BoundingBoxHelper( object, color ) {
-
-	console.warn( 'THREE.BoundingBoxHelper has been deprecated. Creating a THREE.BoxHelper instead.' );
-	return new BoxHelper( object, color );
-
-}
-
-function EdgesHelper( object, hex ) {
-
-	console.warn( 'THREE.EdgesHelper has been removed. Use THREE.EdgesGeometry instead.' );
-	return new LineSegments( new EdgesGeometry( object.geometry ), new LineBasicMaterial( { color: hex !== undefined ? hex : 0xffffff } ) );
-
-}
-
 GridHelper.prototype.setColors = function () {
 
 	console.error( 'THREE.GridHelper: setColors() has been deprecated, pass them in the constructor instead.' );
@@ -45736,13 +45409,6 @@ SkeletonHelper.prototype.update = function () {
 	console.error( 'THREE.SkeletonHelper: update() no longer needs to be called.' );
 
 };
-
-function WireframeHelper( object, hex ) {
-
-	console.warn( 'THREE.WireframeHelper has been removed. Use THREE.WireframeGeometry instead.' );
-	return new LineSegments( new WireframeGeometry( object.geometry ), new LineBasicMaterial( { color: hex !== undefined ? hex : 0xffffff } ) );
-
-}
 
 //
 
@@ -45756,20 +45422,6 @@ Object.assign( Loader.prototype, {
 	}
 
 } );
-
-function XHRLoader( manager ) {
-
-	console.warn( 'THREE.XHRLoader has been renamed to THREE.FileLoader.' );
-	return new FileLoader( manager );
-
-}
-
-function BinaryTextureLoader( manager ) {
-
-	console.warn( 'THREE.BinaryTextureLoader has been renamed to THREE.DataTextureLoader.' );
-	return new DataTextureLoader( manager );
-
-}
 
 Object.assign( ObjectLoader.prototype, {
 
@@ -47109,37 +46761,6 @@ CubeCamera.prototype.updateCubeMap = function ( renderer, scene ) {
 
 };
 
-//
-
-var GeometryUtils = {
-
-	merge: function ( geometry1, geometry2, materialIndexOffset ) {
-
-		console.warn( 'THREE.GeometryUtils: .merge() has been moved to Geometry. Use geometry.merge( geometry2, matrix, materialIndexOffset ) instead.' );
-		var matrix;
-
-		if ( geometry2.isMesh ) {
-
-			geometry2.matrixAutoUpdate && geometry2.updateMatrix();
-
-			matrix = geometry2.matrix;
-			geometry2 = geometry2.geometry;
-
-		}
-
-		geometry1.merge( geometry2, matrix, materialIndexOffset );
-
-	},
-
-	center: function ( geometry ) {
-
-		console.warn( 'THREE.GeometryUtils: .center() has been moved to Geometry. Use geometry.center() instead.' );
-		return geometry.center();
-
-	}
-
-};
-
 ImageUtils.crossOrigin = undefined;
 
 ImageUtils.loadTexture = function ( url, mapping, onLoad, onError ) {
@@ -47184,492 +46805,8 @@ ImageUtils.loadCompressedTextureCube = function () {
 
 };
 
-//
-
-function Projector() {
-
-	console.error( 'THREE.Projector has been moved to /examples/js/renderers/Projector.js.' );
-
-	this.projectVector = function ( vector, camera ) {
-
-		console.warn( 'THREE.Projector: .projectVector() is now vector.project().' );
-		vector.project( camera );
-
-	};
-
-	this.unprojectVector = function ( vector, camera ) {
-
-		console.warn( 'THREE.Projector: .unprojectVector() is now vector.unproject().' );
-		vector.unproject( camera );
-
-	};
-
-	this.pickingRay = function () {
-
-		console.error( 'THREE.Projector: .pickingRay() is now raycaster.setFromCamera().' );
-
-	};
-
-}
-
-//
-
-function CanvasRenderer() {
-
-	console.error( 'THREE.CanvasRenderer has been removed' );
-
-}
-
-//
-
-function JSONLoader() {
-
-	console.error( 'THREE.JSONLoader has been removed.' );
-
-}
-
-//
-
-var SceneUtils = {
-
-	createMultiMaterialObject: function ( /* geometry, materials */ ) {
-
-		console.error( 'THREE.SceneUtils has been moved to /examples/js/utils/SceneUtils.js' );
-
-	},
-
-	detach: function ( /* child, parent, scene */ ) {
-
-		console.error( 'THREE.SceneUtils has been moved to /examples/js/utils/SceneUtils.js' );
-
-	},
-
-	attach: function ( /* child, scene, parent */ ) {
-
-		console.error( 'THREE.SceneUtils has been moved to /examples/js/utils/SceneUtils.js' );
-
-	}
-
-};
-
-//
-
-function LensFlare() {
-
-	console.error( 'THREE.LensFlare has been moved to /examples/js/objects/Lensflare.js' );
-
-}
-
-var THREE$1 = /*#__PURE__*/Object.freeze({
-	WebGLRenderTargetCube: WebGLRenderTargetCube,
-	WebGLRenderTarget: WebGLRenderTarget,
-	WebGLRenderer: WebGLRenderer,
-	ShaderLib: ShaderLib,
-	UniformsLib: UniformsLib,
-	UniformsUtils: UniformsUtils,
-	ShaderChunk: ShaderChunk,
-	FogExp2: FogExp2,
-	Fog: Fog,
-	Scene: Scene,
-	Sprite: Sprite,
-	LOD: LOD,
-	SkinnedMesh: SkinnedMesh,
-	Skeleton: Skeleton,
-	Bone: Bone,
-	Mesh: Mesh,
-	LineSegments: LineSegments,
-	LineLoop: LineLoop,
-	Line: Line,
-	Points: Points,
-	Group: Group,
-	VideoTexture: VideoTexture,
-	DataTexture: DataTexture,
-	DataTexture3D: DataTexture3D,
-	CompressedTexture: CompressedTexture,
-	CubeTexture: CubeTexture,
-	CanvasTexture: CanvasTexture,
-	DepthTexture: DepthTexture,
-	Texture: Texture,
-	AnimationLoader: AnimationLoader,
-	CompressedTextureLoader: CompressedTextureLoader,
-	DataTextureLoader: DataTextureLoader,
-	CubeTextureLoader: CubeTextureLoader,
-	TextureLoader: TextureLoader,
-	ObjectLoader: ObjectLoader,
-	MaterialLoader: MaterialLoader,
-	BufferGeometryLoader: BufferGeometryLoader,
-	DefaultLoadingManager: DefaultLoadingManager,
-	LoadingManager: LoadingManager,
-	ImageLoader: ImageLoader,
-	ImageBitmapLoader: ImageBitmapLoader,
-	FontLoader: FontLoader,
-	FileLoader: FileLoader,
-	Loader: Loader,
-	LoaderUtils: LoaderUtils,
-	Cache: Cache,
-	AudioLoader: AudioLoader,
-	SpotLightShadow: SpotLightShadow,
-	SpotLight: SpotLight,
-	PointLight: PointLight,
-	RectAreaLight: RectAreaLight,
-	HemisphereLight: HemisphereLight,
-	DirectionalLightShadow: DirectionalLightShadow,
-	DirectionalLight: DirectionalLight,
-	AmbientLight: AmbientLight,
-	LightShadow: LightShadow,
-	Light: Light,
-	StereoCamera: StereoCamera,
-	PerspectiveCamera: PerspectiveCamera,
-	OrthographicCamera: OrthographicCamera,
-	CubeCamera: CubeCamera,
-	ArrayCamera: ArrayCamera,
-	Camera: Camera,
-	AudioListener: AudioListener,
-	PositionalAudio: PositionalAudio,
-	AudioContext: AudioContext,
-	AudioAnalyser: AudioAnalyser,
-	Audio: Audio,
-	VectorKeyframeTrack: VectorKeyframeTrack,
-	StringKeyframeTrack: StringKeyframeTrack,
-	QuaternionKeyframeTrack: QuaternionKeyframeTrack,
-	NumberKeyframeTrack: NumberKeyframeTrack,
-	ColorKeyframeTrack: ColorKeyframeTrack,
-	BooleanKeyframeTrack: BooleanKeyframeTrack,
-	PropertyMixer: PropertyMixer,
-	PropertyBinding: PropertyBinding,
-	KeyframeTrack: KeyframeTrack,
-	AnimationUtils: AnimationUtils,
-	AnimationObjectGroup: AnimationObjectGroup,
-	AnimationMixer: AnimationMixer,
-	AnimationClip: AnimationClip,
-	Uniform: Uniform,
-	InstancedBufferGeometry: InstancedBufferGeometry,
-	BufferGeometry: BufferGeometry,
-	Geometry: Geometry,
-	InterleavedBufferAttribute: InterleavedBufferAttribute,
-	InstancedInterleavedBuffer: InstancedInterleavedBuffer,
-	InterleavedBuffer: InterleavedBuffer,
-	InstancedBufferAttribute: InstancedBufferAttribute,
-	Face3: Face3,
-	Object3D: Object3D,
-	Raycaster: Raycaster,
-	Layers: Layers,
-	EventDispatcher: EventDispatcher,
-	Clock: Clock,
-	QuaternionLinearInterpolant: QuaternionLinearInterpolant,
-	LinearInterpolant: LinearInterpolant,
-	DiscreteInterpolant: DiscreteInterpolant,
-	CubicInterpolant: CubicInterpolant,
-	Interpolant: Interpolant,
-	Triangle: Triangle,
-	Math: _Math,
-	Spherical: Spherical,
-	Cylindrical: Cylindrical,
-	Plane: Plane,
-	Frustum: Frustum,
-	Sphere: Sphere,
-	Ray: Ray,
-	Matrix4: Matrix4,
-	Matrix3: Matrix3,
-	Box3: Box3,
-	Box2: Box2,
-	Line3: Line3,
-	Euler: Euler,
-	Vector4: Vector4,
-	Vector3: Vector3,
-	Vector2: Vector2,
-	Quaternion: Quaternion,
-	Color: Color,
-	ImmediateRenderObject: ImmediateRenderObject,
-	VertexNormalsHelper: VertexNormalsHelper,
-	SpotLightHelper: SpotLightHelper,
-	SkeletonHelper: SkeletonHelper,
-	PointLightHelper: PointLightHelper,
-	RectAreaLightHelper: RectAreaLightHelper,
-	HemisphereLightHelper: HemisphereLightHelper,
-	GridHelper: GridHelper,
-	PolarGridHelper: PolarGridHelper,
-	FaceNormalsHelper: FaceNormalsHelper,
-	DirectionalLightHelper: DirectionalLightHelper,
-	CameraHelper: CameraHelper,
-	BoxHelper: BoxHelper,
-	Box3Helper: Box3Helper,
-	PlaneHelper: PlaneHelper,
-	ArrowHelper: ArrowHelper,
-	AxesHelper: AxesHelper,
-	Shape: Shape,
-	Path: Path,
-	ShapePath: ShapePath,
-	Font: Font,
-	CurvePath: CurvePath,
-	Curve: Curve,
-	ImageUtils: ImageUtils,
-	ShapeUtils: ShapeUtils,
-	WebGLUtils: WebGLUtils,
-	WireframeGeometry: WireframeGeometry,
-	ParametricGeometry: ParametricGeometry,
-	ParametricBufferGeometry: ParametricBufferGeometry,
-	TetrahedronGeometry: TetrahedronGeometry,
-	TetrahedronBufferGeometry: TetrahedronBufferGeometry,
-	OctahedronGeometry: OctahedronGeometry,
-	OctahedronBufferGeometry: OctahedronBufferGeometry,
-	IcosahedronGeometry: IcosahedronGeometry,
-	IcosahedronBufferGeometry: IcosahedronBufferGeometry,
-	DodecahedronGeometry: DodecahedronGeometry,
-	DodecahedronBufferGeometry: DodecahedronBufferGeometry,
-	PolyhedronGeometry: PolyhedronGeometry,
-	PolyhedronBufferGeometry: PolyhedronBufferGeometry,
-	TubeGeometry: TubeGeometry,
-	TubeBufferGeometry: TubeBufferGeometry,
-	TorusKnotGeometry: TorusKnotGeometry,
-	TorusKnotBufferGeometry: TorusKnotBufferGeometry,
-	TorusGeometry: TorusGeometry,
-	TorusBufferGeometry: TorusBufferGeometry,
-	TextGeometry: TextGeometry,
-	TextBufferGeometry: TextBufferGeometry,
-	SphereGeometry: SphereGeometry,
-	SphereBufferGeometry: SphereBufferGeometry,
-	RingGeometry: RingGeometry,
-	RingBufferGeometry: RingBufferGeometry,
-	PlaneGeometry: PlaneGeometry,
-	PlaneBufferGeometry: PlaneBufferGeometry,
-	LatheGeometry: LatheGeometry,
-	LatheBufferGeometry: LatheBufferGeometry,
-	ShapeGeometry: ShapeGeometry,
-	ShapeBufferGeometry: ShapeBufferGeometry,
-	ExtrudeGeometry: ExtrudeGeometry,
-	ExtrudeBufferGeometry: ExtrudeBufferGeometry,
-	EdgesGeometry: EdgesGeometry,
-	ConeGeometry: ConeGeometry,
-	ConeBufferGeometry: ConeBufferGeometry,
-	CylinderGeometry: CylinderGeometry,
-	CylinderBufferGeometry: CylinderBufferGeometry,
-	CircleGeometry: CircleGeometry,
-	CircleBufferGeometry: CircleBufferGeometry,
-	BoxGeometry: BoxGeometry,
-	BoxBufferGeometry: BoxBufferGeometry,
-	ShadowMaterial: ShadowMaterial,
-	SpriteMaterial: SpriteMaterial,
-	RawShaderMaterial: RawShaderMaterial,
-	ShaderMaterial: ShaderMaterial,
-	PointsMaterial: PointsMaterial,
-	MeshPhysicalMaterial: MeshPhysicalMaterial,
-	MeshStandardMaterial: MeshStandardMaterial,
-	MeshPhongMaterial: MeshPhongMaterial,
-	MeshToonMaterial: MeshToonMaterial,
-	MeshNormalMaterial: MeshNormalMaterial,
-	MeshLambertMaterial: MeshLambertMaterial,
-	MeshDepthMaterial: MeshDepthMaterial,
-	MeshDistanceMaterial: MeshDistanceMaterial,
-	MeshBasicMaterial: MeshBasicMaterial,
-	MeshMatcapMaterial: MeshMatcapMaterial,
-	LineDashedMaterial: LineDashedMaterial,
-	LineBasicMaterial: LineBasicMaterial,
-	Material: Material,
-	Float64BufferAttribute: Float64BufferAttribute,
-	Float32BufferAttribute: Float32BufferAttribute,
-	Uint32BufferAttribute: Uint32BufferAttribute,
-	Int32BufferAttribute: Int32BufferAttribute,
-	Uint16BufferAttribute: Uint16BufferAttribute,
-	Int16BufferAttribute: Int16BufferAttribute,
-	Uint8ClampedBufferAttribute: Uint8ClampedBufferAttribute,
-	Uint8BufferAttribute: Uint8BufferAttribute,
-	Int8BufferAttribute: Int8BufferAttribute,
-	BufferAttribute: BufferAttribute,
-	ArcCurve: ArcCurve,
-	CatmullRomCurve3: CatmullRomCurve3,
-	CubicBezierCurve: CubicBezierCurve,
-	CubicBezierCurve3: CubicBezierCurve3,
-	EllipseCurve: EllipseCurve,
-	LineCurve: LineCurve,
-	LineCurve3: LineCurve3,
-	QuadraticBezierCurve: QuadraticBezierCurve,
-	QuadraticBezierCurve3: QuadraticBezierCurve3,
-	SplineCurve: SplineCurve,
-	REVISION: REVISION,
-	MOUSE: MOUSE,
-	CullFaceNone: CullFaceNone,
-	CullFaceBack: CullFaceBack,
-	CullFaceFront: CullFaceFront,
-	CullFaceFrontBack: CullFaceFrontBack,
-	FrontFaceDirectionCW: FrontFaceDirectionCW,
-	FrontFaceDirectionCCW: FrontFaceDirectionCCW,
-	BasicShadowMap: BasicShadowMap,
-	PCFShadowMap: PCFShadowMap,
-	PCFSoftShadowMap: PCFSoftShadowMap,
-	FrontSide: FrontSide,
-	BackSide: BackSide,
-	DoubleSide: DoubleSide,
-	FlatShading: FlatShading,
-	SmoothShading: SmoothShading,
-	NoColors: NoColors,
-	FaceColors: FaceColors,
-	VertexColors: VertexColors,
-	NoBlending: NoBlending,
-	NormalBlending: NormalBlending,
-	AdditiveBlending: AdditiveBlending,
-	SubtractiveBlending: SubtractiveBlending,
-	MultiplyBlending: MultiplyBlending,
-	CustomBlending: CustomBlending,
-	AddEquation: AddEquation,
-	SubtractEquation: SubtractEquation,
-	ReverseSubtractEquation: ReverseSubtractEquation,
-	MinEquation: MinEquation,
-	MaxEquation: MaxEquation,
-	ZeroFactor: ZeroFactor,
-	OneFactor: OneFactor,
-	SrcColorFactor: SrcColorFactor,
-	OneMinusSrcColorFactor: OneMinusSrcColorFactor,
-	SrcAlphaFactor: SrcAlphaFactor,
-	OneMinusSrcAlphaFactor: OneMinusSrcAlphaFactor,
-	DstAlphaFactor: DstAlphaFactor,
-	OneMinusDstAlphaFactor: OneMinusDstAlphaFactor,
-	DstColorFactor: DstColorFactor,
-	OneMinusDstColorFactor: OneMinusDstColorFactor,
-	SrcAlphaSaturateFactor: SrcAlphaSaturateFactor,
-	NeverDepth: NeverDepth,
-	AlwaysDepth: AlwaysDepth,
-	LessDepth: LessDepth,
-	LessEqualDepth: LessEqualDepth,
-	EqualDepth: EqualDepth,
-	GreaterEqualDepth: GreaterEqualDepth,
-	GreaterDepth: GreaterDepth,
-	NotEqualDepth: NotEqualDepth,
-	MultiplyOperation: MultiplyOperation,
-	MixOperation: MixOperation,
-	AddOperation: AddOperation,
-	NoToneMapping: NoToneMapping,
-	LinearToneMapping: LinearToneMapping,
-	ReinhardToneMapping: ReinhardToneMapping,
-	Uncharted2ToneMapping: Uncharted2ToneMapping,
-	CineonToneMapping: CineonToneMapping,
-	ACESFilmicToneMapping: ACESFilmicToneMapping,
-	UVMapping: UVMapping,
-	CubeReflectionMapping: CubeReflectionMapping,
-	CubeRefractionMapping: CubeRefractionMapping,
-	EquirectangularReflectionMapping: EquirectangularReflectionMapping,
-	EquirectangularRefractionMapping: EquirectangularRefractionMapping,
-	SphericalReflectionMapping: SphericalReflectionMapping,
-	CubeUVReflectionMapping: CubeUVReflectionMapping,
-	CubeUVRefractionMapping: CubeUVRefractionMapping,
-	RepeatWrapping: RepeatWrapping,
-	ClampToEdgeWrapping: ClampToEdgeWrapping,
-	MirroredRepeatWrapping: MirroredRepeatWrapping,
-	NearestFilter: NearestFilter,
-	NearestMipMapNearestFilter: NearestMipMapNearestFilter,
-	NearestMipMapLinearFilter: NearestMipMapLinearFilter,
-	LinearFilter: LinearFilter,
-	LinearMipMapNearestFilter: LinearMipMapNearestFilter,
-	LinearMipMapLinearFilter: LinearMipMapLinearFilter,
-	UnsignedByteType: UnsignedByteType,
-	ByteType: ByteType,
-	ShortType: ShortType,
-	UnsignedShortType: UnsignedShortType,
-	IntType: IntType,
-	UnsignedIntType: UnsignedIntType,
-	FloatType: FloatType,
-	HalfFloatType: HalfFloatType,
-	UnsignedShort4444Type: UnsignedShort4444Type,
-	UnsignedShort5551Type: UnsignedShort5551Type,
-	UnsignedShort565Type: UnsignedShort565Type,
-	UnsignedInt248Type: UnsignedInt248Type,
-	AlphaFormat: AlphaFormat,
-	RGBFormat: RGBFormat,
-	RGBAFormat: RGBAFormat,
-	LuminanceFormat: LuminanceFormat,
-	LuminanceAlphaFormat: LuminanceAlphaFormat,
-	RGBEFormat: RGBEFormat,
-	DepthFormat: DepthFormat,
-	DepthStencilFormat: DepthStencilFormat,
-	RedFormat: RedFormat,
-	RGB_S3TC_DXT1_Format: RGB_S3TC_DXT1_Format,
-	RGBA_S3TC_DXT1_Format: RGBA_S3TC_DXT1_Format,
-	RGBA_S3TC_DXT3_Format: RGBA_S3TC_DXT3_Format,
-	RGBA_S3TC_DXT5_Format: RGBA_S3TC_DXT5_Format,
-	RGB_PVRTC_4BPPV1_Format: RGB_PVRTC_4BPPV1_Format,
-	RGB_PVRTC_2BPPV1_Format: RGB_PVRTC_2BPPV1_Format,
-	RGBA_PVRTC_4BPPV1_Format: RGBA_PVRTC_4BPPV1_Format,
-	RGBA_PVRTC_2BPPV1_Format: RGBA_PVRTC_2BPPV1_Format,
-	RGB_ETC1_Format: RGB_ETC1_Format,
-	RGBA_ASTC_4x4_Format: RGBA_ASTC_4x4_Format,
-	RGBA_ASTC_5x4_Format: RGBA_ASTC_5x4_Format,
-	RGBA_ASTC_5x5_Format: RGBA_ASTC_5x5_Format,
-	RGBA_ASTC_6x5_Format: RGBA_ASTC_6x5_Format,
-	RGBA_ASTC_6x6_Format: RGBA_ASTC_6x6_Format,
-	RGBA_ASTC_8x5_Format: RGBA_ASTC_8x5_Format,
-	RGBA_ASTC_8x6_Format: RGBA_ASTC_8x6_Format,
-	RGBA_ASTC_8x8_Format: RGBA_ASTC_8x8_Format,
-	RGBA_ASTC_10x5_Format: RGBA_ASTC_10x5_Format,
-	RGBA_ASTC_10x6_Format: RGBA_ASTC_10x6_Format,
-	RGBA_ASTC_10x8_Format: RGBA_ASTC_10x8_Format,
-	RGBA_ASTC_10x10_Format: RGBA_ASTC_10x10_Format,
-	RGBA_ASTC_12x10_Format: RGBA_ASTC_12x10_Format,
-	RGBA_ASTC_12x12_Format: RGBA_ASTC_12x12_Format,
-	LoopOnce: LoopOnce,
-	LoopRepeat: LoopRepeat,
-	LoopPingPong: LoopPingPong,
-	InterpolateDiscrete: InterpolateDiscrete,
-	InterpolateLinear: InterpolateLinear,
-	InterpolateSmooth: InterpolateSmooth,
-	ZeroCurvatureEnding: ZeroCurvatureEnding,
-	ZeroSlopeEnding: ZeroSlopeEnding,
-	WrapAroundEnding: WrapAroundEnding,
-	TrianglesDrawMode: TrianglesDrawMode,
-	TriangleStripDrawMode: TriangleStripDrawMode,
-	TriangleFanDrawMode: TriangleFanDrawMode,
-	LinearEncoding: LinearEncoding,
-	sRGBEncoding: sRGBEncoding,
-	GammaEncoding: GammaEncoding,
-	RGBEEncoding: RGBEEncoding,
-	LogLuvEncoding: LogLuvEncoding,
-	RGBM7Encoding: RGBM7Encoding,
-	RGBM16Encoding: RGBM16Encoding,
-	RGBDEncoding: RGBDEncoding,
-	BasicDepthPacking: BasicDepthPacking,
-	RGBADepthPacking: RGBADepthPacking,
-	TangentSpaceNormalMap: TangentSpaceNormalMap,
-	ObjectSpaceNormalMap: ObjectSpaceNormalMap,
-	CubeGeometry: BoxGeometry,
-	Face4: Face4,
-	LineStrip: LineStrip,
-	LinePieces: LinePieces,
-	MeshFaceMaterial: MeshFaceMaterial,
-	MultiMaterial: MultiMaterial,
-	PointCloud: PointCloud,
-	Particle: Particle,
-	ParticleSystem: ParticleSystem,
-	PointCloudMaterial: PointCloudMaterial,
-	ParticleBasicMaterial: ParticleBasicMaterial,
-	ParticleSystemMaterial: ParticleSystemMaterial,
-	Vertex: Vertex,
-	DynamicBufferAttribute: DynamicBufferAttribute,
-	Int8Attribute: Int8Attribute,
-	Uint8Attribute: Uint8Attribute,
-	Uint8ClampedAttribute: Uint8ClampedAttribute,
-	Int16Attribute: Int16Attribute,
-	Uint16Attribute: Uint16Attribute,
-	Int32Attribute: Int32Attribute,
-	Uint32Attribute: Uint32Attribute,
-	Float32Attribute: Float32Attribute,
-	Float64Attribute: Float64Attribute,
-	ClosedSplineCurve3: ClosedSplineCurve3,
-	SplineCurve3: SplineCurve3,
-	Spline: Spline,
-	AxisHelper: AxisHelper,
-	BoundingBoxHelper: BoundingBoxHelper,
-	EdgesHelper: EdgesHelper,
-	WireframeHelper: WireframeHelper,
-	XHRLoader: XHRLoader,
-	BinaryTextureLoader: BinaryTextureLoader,
-	GeometryUtils: GeometryUtils,
-	Projector: Projector,
-	CanvasRenderer: CanvasRenderer,
-	JSONLoader: JSONLoader,
-	SceneUtils: SceneUtils,
-	LensFlare: LensFlare
-});
-
 function eventMixin(Class) {
+    Object.assign(Class.prototype, EventDispatcher.prototype);
     const eventMap = new Map();
     Object.assign(Class.prototype, {
         on(eventType, fn) {
@@ -47701,17 +46838,21 @@ const initEvent = (function() {
     const vector = new Vector3(mouse.x, mouse.y, 0.5);
     // let preHoveredEntity = undefined
     const intersectObjects = function(eventType, mo, e) {
-        if ([...mo._overlays, mo].filter(it => it.hasEventListener(eventType)).length === 0) {
+        if (!mo.building) {
             return
         }
         let point = e.touches ? e.touches[0] : e;
-        vector.set((point.pageX / mo.$wrapper.clientWidth) * 2 - 1, -(point.pageY / mo.$wrapper.clientHeight) * 2 + 1, 0.5);
+        vector.set(
+            (point.pageX / mo.$wrapper.clientWidth) * 2 - 1,
+            -(point.pageY / mo.$wrapper.clientHeight) * 2 + 1,
+            0.5
+        );
         raycaster.setFromCamera(vector, mo._camera);
         return raycaster.intersectObjects(
             [...mo._overlays]
                 .filter(it => it.hasEventListener(eventType))
-                .concat(mo.building.floors)
                 .map(it => it.object3D)
+                .concat(mo.building.floors)
                 .filter(it => it.visible),
             true
         )
@@ -47727,8 +46868,12 @@ const initEvent = (function() {
                 overlay = intersects[0].object.handler;
                 intersects[0].object.handler.dispatchEvent({ type: 'click', message: { overlay, domEvent: e } });
             }
+            intersects
+                .filter(it => it.object.isRoom)
+                .splice(0, 1)
+                .forEach(it => it.object.dispatchEvent({ type: 'click' }));
             if (mo.hasEventListener('click')) {
-                let floor = intersects.filter(it => it.object.name === 'floor')[0];
+                let floor = intersects.filter(it => it.object.isFloor)[0];
                 if (floor) {
                     mo.dispatchEvent({
                         type: 'click',
@@ -47793,7 +46938,6 @@ class Overlay {
     }
 }
 
-Object.assign(Overlay.prototype, THREE$1.EventDispatcher.prototype);
 eventMixin(Overlay);
 
 Object.defineProperties(Overlay.prototype, {
@@ -47835,7 +46979,7 @@ Object.defineProperties(HTMLOverlay.prototype, {
     },
 });
 
-const PUB_POINT_SIZE = new THREE$1.Vector2(20, 20);
+const PUB_POINT_SIZE = new Vector2(20, 20);
 
 class Marker extends Overlay {
     constructor(location, options = {}) {
@@ -47853,11 +46997,11 @@ class Marker extends Overlay {
     makeObject3D() {
         let { icon } = this.options;
 
-        this.texture = new THREE$1.TextureLoader().load(icon, t => {
+        this.texture = new TextureLoader().load(icon, t => {
             t.needsUpdate = true;
         });
-        this.texture.minFilter = THREE$1.LinearFilter;
-        this.material = new THREE$1.SpriteMaterial({
+        this.texture.minFilter = LinearFilter;
+        this.material = new SpriteMaterial({
             map: this.texture,
             sizeAttenuation: false,
             transparent: true,
@@ -47865,8 +47009,14 @@ class Marker extends Overlay {
             depthTest: false,
         });
 
-        let sprite = new THREE$1.Sprite(this.material);
-        let size = this.options.size || PUB_POINT_SIZE;
+        let sprite = new Sprite(this.material);
+        let size = PUB_POINT_SIZE;
+        if (typeof this.options.size === 'number' || typeof this.options.size === 'string') {
+            size = Number(this.options.size);
+            size = new Vector2(size, size);
+        } else if (this.options.size && this.options.size.width > 0) {
+            size = this.options.size;
+        }
         let align = this.options.align || 'CENTER';
         sprite.width = size.width;
         sprite.height = size.height;
@@ -47934,9 +47084,12 @@ function overlayMixin(XMap) {
                     this.$overlayWrapper.appendChild(overlay.$el);
                     overlay.render(this.locationToViewport(overlay.location));
                 } else {
-                    let floorObj = this.building.getFloor(overlay.floor).object3D;
-                    floorObj.add(overlay.object3D);
-                    overlay.onAppend && overlay.onAppend(floorObj);
+                    let floorObj = this.building.getFloor(overlay.floor);
+                    if (floorObj) {
+                        floorObj.add(overlay.object3D);
+                    } else {
+                        throw new Error('invalid floor')
+                    }
                 }
             }
         },
@@ -48130,13 +47283,13 @@ class OrbitControl {
     }
 
     _initVars() {
-        this.startPosition = new THREE$1.Vector2();
-        this.endPosition = new THREE$1.Vector2();
-        this.deltaVector = new THREE$1.Vector2();
-        this.touchStartPoints = [new THREE$1.Vector2(), new THREE$1.Vector2(), new THREE$1.Vector2()];
-        this.touchEndPoints = [new THREE$1.Vector2(), new THREE$1.Vector2(), new THREE$1.Vector2()];
+        this.startPosition = new Vector2();
+        this.endPosition = new Vector2();
+        this.deltaVector = new Vector2();
+        this.touchStartPoints = [new Vector2(), new Vector2(), new Vector2()];
+        this.touchEndPoints = [new Vector2(), new Vector2(), new Vector2()];
 
-        this.cameraInverseMatrix = new THREE$1.Matrix4();
+        this.cameraInverseMatrix = new Matrix4();
 
         this.phiDelta = 0;
         this.thetaDelta = 0;
@@ -48145,9 +47298,9 @@ class OrbitControl {
 
         this.state = STATE.NONE;
 
-        this.lastPosition = new THREE$1.Vector3();
+        this.lastPosition = new Vector3();
 
-        this.center = new THREE$1.Vector3();
+        this.center = new Vector3();
     }
 
     _initListeners(remove) {
@@ -48314,18 +47467,18 @@ class OrbitControl {
     }
 }
 
-Object.assign(OrbitControl.prototype, Object.create(THREE$1.EventDispatcher.prototype));
+Object.assign(OrbitControl.prototype, Object.create(EventDispatcher.prototype));
 Object.assign(OrbitControl.prototype, {
     viewToWorld: (function() {
-        const raycaster = new THREE$1.Raycaster();
-        const vector = new THREE$1.Vector3(0, 0, 0.5);
-        const plane = new THREE$1.Plane(new THREE$1.Vector3(0, 1, 0), 0);
+        const raycaster = new Raycaster();
+        const vector = new Vector3(0, 0, 0.5);
+        const plane = new Plane(new Vector3(0, 1, 0), 0);
 
         return function(point) {
             vector.x = (point.x / this.wrapper.clientWidth) * 2 - 1;
             vector.y = -(point.y / this.wrapper.clientHeight) * 2 + 1;
             raycaster.setFromCamera(vector, this.camera);
-            let result = new THREE$1.Vector3();
+            let result = new Vector3();
             raycaster.ray.intersectPlane(plane, result);
             return result
         }
@@ -48337,86 +47490,40 @@ class BaseControl {
     }
 }
 
-const parsePoints = array => {
-    var points = [];
-    for (var i = 0; i < array.length; i += 2) {
-        var point = new THREE$1.Vector2(array[i], array[i + 1]);
-        if (i > 0) {
-            if (points[points.length - 1].manhattanDistanceTo(point) > 1e-4) {
-                points.push(point);
-            }
-        } else {
-            points.push(point);
-        }
-    }
-    return points
-};
-
-const compileTemplate = template => {
-    const evalExpr = /<%=(.+?)%>/g;
-    const expr = /<%([\s\S]+?)%>/g;
-
-    /**
-     * @prettier --print-width=80
-     */
-    template = template.replace(evalExpr, '`); \n  echo( $1 ); \n  echo(`').replace(expr, '`); \n $1 \n  echo(`');
-
-    template = 'echo(`' + template + '`);';
-
-    let script = `(function parse(data){
-      let output = "";
-      function echo(html){
-        output += html;
-      }
-      ${template}
-      return output;
-    })`;
-
-    return eval(script)
-};
-
-const appendHTML = function(element, html) {
-    var divTemp = document.createElement('div'),
-        nodes = null,
-        fragment = document.createDocumentFragment();
-    divTemp.innerHTML = html;
-    nodes = divTemp.childNodes;
-    for (var i = 0, length = nodes.length; i < length; i += 1) {
-        fragment.appendChild(nodes[i].cloneNode(true));
-    }
-    element.appendChild(fragment);
-
-    nodes = null;
-    fragment = null;
-};
-
-const TEMPLATE = `
-<ul class='imap-floor-control'>
-  <% for(let i=0; i < data.length; i++) { %>
-    <li><%= data[i] %></li>
-  <% } %>
-</ul>
-`;
-const context$1 = compileTemplate(TEMPLATE);
-
 class FloorControl extends BaseControl {
-    constructor(camera, wrapper) {
+    constructor(mo) {
         super();
 
-        this.camera = camera;
-        this.wrapper = wrapper;
+        this.map = mo;
+        this.camera = mo._camera;
+        this.$el = document.createElement('ul');
+        this.$el.classList = ['imap-floor-control'];
+        this.$el.style.display = 'none';
+
+        mo.$controlWrapper.appendChild(this.$el);
     }
 
-    show(wrapper, building) {
+    show(building) {
         this.building = building;
 
         const floors = new Map(building.floors.map(f => [f.info.name, f]));
         if (floors.size < 2) {
+            this.$el.style.display = 'none';
             return
         }
-        appendHTML(wrapper, context$1(['All', ...building.floors.map(f => f.name).reverse()]));
-        let elements = [...wrapper.getElementsByTagName('li')];
-        elements.forEach(ele => ele.addEventListener('click', () => this.showFloor(floors.get(ele.innerHTML))));
+        while (this.$el.lastChild) this.$el.removeChild(this.$el.lastChild);
+
+        building.floors
+            .map(f => f.name)
+            .concat('All')
+            .reverse()
+            .forEach(it => {
+                let li = document.createElement('li');
+                li.appendChild(document.createTextNode(it));
+                li.addEventListener('click', () => this.showFloor(floors.get(li.innerHTML)));
+                this.$el.appendChild(li);
+            });
+        this.$el.style.display = 'block';
     }
 
     showFloor(floor) {
@@ -48425,45 +47532,9 @@ class FloorControl extends BaseControl {
         } else {
             this.building.showAllFloors();
         }
-        this.building.updateBound(this.camera);
+        this.building.updateBound(this.map);
     }
 }
-
-class MapObejct {
-    constructor() {}
-}
-
-Object.assign(MapObejct.prototype, {
-    parsePoints,
-});
-
-const mapObejctMixins = map => {
-    Object.defineProperties(MapObejct.prototype, {
-        map: {
-            enumerable: false,
-            configurable: true,
-            get: function reactiveGetter() {
-                return map
-            },
-        },
-
-        mapStyle: {
-            enumerable: false,
-            configurable: true,
-            get: function reactiveGetter() {
-                return map.getMapStyle()
-            },
-        },
-
-        canvasScale: {
-            enumerable: false,
-            configurable: true,
-            get: function reactiveGetter() {
-                return map._canvasScale
-            },
-        },
-    });
-};
 
 const ViewMode = {
     MODE_3D: '3d',
@@ -48489,7 +47560,7 @@ function changeViewMode(mo, is3dMode) {
             object.children.forEach(obj => changeMode(obj));
         }
     }
-    changeMode(mo.building.object3D);
+    changeMode(mo.building);
 }
 
 function viewMixin(XMap) {
@@ -48516,15 +47587,14 @@ function viewMixin(XMap) {
         },
 
         locationToViewport: (function() {
-            const worldPosition = new THREE$1.Vector3();
-            const screenPosition = new THREE$1.Vector4();
+            const worldPosition = new Vector3();
+            const screenPosition = new Vector4();
             return function parseLocation(location) {
                 worldPosition.copy(location);
                 let floor = this.building.getFloor(location.floor);
                 if (!floor) {
                     throw new Error('invalid floor')
                 }
-                floor = floor.object3D;
                 if (!floor.visible) {
                     return {
                         x: -Infinity,
@@ -48550,7 +47620,7 @@ function viewMixin(XMap) {
     Object.defineProperties(XMap.prototype, {
         viewportMatrix: {
             writable: false,
-            value: new THREE$1.Matrix4(),
+            value: new Matrix4(),
         },
     });
 }
@@ -48576,23 +47646,23 @@ function initThree(mo) {
         height = mo.$wrapper.clientHeight;
     mo._canvasScale = Math.round(height / Math.sin((PERSPECTIVE_FOV / 180) * Math.PI));
 
-    mo._scene = new THREE$1.Scene();
-    mo._camera = new THREE$1.PerspectiveCamera(PERSPECTIVE_FOV, width / height, 140, 100000);
+    mo._scene = new Scene();
+    mo._camera = new PerspectiveCamera(PERSPECTIVE_FOV, width / height, 140, 100000);
 
     //set up the lights
-    let light = new THREE$1.AmbientLight(0x747474);
+    let light = new AmbientLight(0x747474);
     mo._scene.add(light);
 
-    light = new THREE$1.DirectionalLight(0xadadad, 1.2);
+    light = new DirectionalLight(0xadadad, 1.2);
     light.position.set(4000, 4000, 4000).normalize();
     light.target.position.set(0, 0, 0);
     mo._scene.add(light);
 
-    light = new THREE$1.DirectionalLight(0x333333);
+    light = new DirectionalLight(0x333333);
     light.position.set(-4000, 2000, -4000).normalize();
     mo._scene.add(light);
 
-    mo.renderer = new THREE$1.WebGLRenderer({
+    mo.renderer = new WebGLRenderer({
         antialias: true,
     });
     mo.renderer.autoClear = false;
@@ -48631,28 +47701,188 @@ function initView(mo) {
     addEvent(window, 'resize', () => refreshSize());
 }
 
-function Label(text, options = {}) {
-    this.options = options;
-
-    let canvas = document.createElement('canvas');
-    let texture = new Texture(canvas);
-    texture.minFilter = LinearFilter;
-    this.texture = texture;
-    this.canvas = canvas;
-    let spriteMaterial = new SpriteMaterial({
-        map: texture,
-        sizeAttenuation: false,
-        transparent: true,
-        alphaTest: 0.1,
+const mixinMapObject = function(Class, type) {
+    eventMixin(Class);
+    Object.assign(Class.prototype, {});
+    Object.defineProperties(Class.prototype, {
+        canvasScale: {
+            enumerable: false,
+            configurable: true,
+            get: function reactiveGetter() {
+                return this.$map ? this.$map._canvasScale : 1
+            },
+        },
+        isMapObject: {
+            writable: false,
+            value: true,
+        },
     });
+    if (type) {
+        Object.defineProperties(Class.prototype, {
+            [`is${type}`]: {
+                writable: false,
+                value: true,
+            },
+        });
+    }
+};
 
-    Sprite.call(this, spriteMaterial);
+const parsePoints = array => {
+    var points = [];
+    for (var i = 0; i < array.length; i += 2) {
+        var point = new Vector2(array[i], array[i + 1]);
+        if (i > 0) {
+            if (points[points.length - 1].manhattanDistanceTo(point) > 1e-4) {
+                points.push(point);
+            }
+        } else {
+            points.push(point);
+        }
+    }
+    return points
+};
 
-    this.type = 'Label';
-    this.boundBox = new Box2();
-    this.worldScale = new Vector3();
+const __needsUpdate__ = new Map();
 
-    this.setText(text);
+class SpriteCanvasMaterial extends SpriteMaterial {
+    constructor({ measure, compile }) {
+        let canvas = document.createElement('canvas');
+        let texture = new Texture(canvas);
+        texture.minFilter = LinearFilter;
+        super({
+            map: texture,
+            sizeAttenuation: false,
+            transparent: true,
+            alphaTest: 0.1,
+        });
+        this.measure = measure;
+        this.compile = compile;
+
+        this.needsUpdate = true;
+    }
+
+    set needsUpdate(value) {
+        __needsUpdate__.set(this, value);
+        if (value && this.map) {
+            let canvas = this.map.image;
+            canvas.width = 512;
+            canvas.height = 512;
+            let size = this.measure(canvas.getContext('2d'));
+            canvas.width = Math.ceil(size.width);
+            canvas.height = Math.ceil(size.height);
+            let context = canvas.getContext('2d');
+            context.imageSmoothingEnabled = true;
+            this.compile(context);
+            this.map.needsUpdate = true;
+        }
+    }
+
+    get needsUpdate() {
+        return __needsUpdate__.get(this)
+    }
+
+    get width() {
+        return this.map.image.width
+    }
+
+    get height() {
+        return this.map.image.height
+    }
+}
+
+function getValue(value) {
+    return typeof value === 'function' ? value() : value
+}
+
+const defaultIconSize = new Vector2(15, 15);
+const __needsUpdate__$1 = new Map();
+
+class Label extends Sprite {
+    constructor(text, options = {}) {
+        super();
+        this.text = text;
+        this.options = options;
+
+        this._initMaterial_();
+
+        this.type = 'Label';
+        this.boundBox = new Box2();
+    }
+
+    setText(text) {
+        this.text = text;
+    }
+
+    _initMaterial_() {
+        let icon, iconPosition, iconSize;
+        let fontface = this.options.fontsize || 'sans-serif';
+        let fontsize = this.options.fontsize || 16;
+        let color = this.options.color || 'rgba(0,0,0,1)';
+        this.material = new SpriteCanvasMaterial({
+            measure: context => {
+                context.font = fontsize + 'px ' + fontface;
+                let metrics = context.measureText(this.text);
+                let width = metrics.width || 1;
+                let height = fontsize * 1.2;
+                if (this.options.icon) {
+                    icon = getValue(this.options.icon);
+                    iconPosition = getValue(this.options.iconPosition) || 'left';
+                    iconSize = getValue(this.options.iconSize) || defaultIconSize;
+                    if (iconPosition == 'top') {
+                        height += iconSize.height;
+                    } else {
+                        width += iconSize.width + 2;
+                    }
+                } else {
+                    icon = null;
+                }
+                return { width, height }
+            },
+            compile: context => {
+                let offsetX = 0,
+                    offsetY = 0;
+                if (icon) {
+                    if (iconPosition == 'top') {
+                        offsetY = iconSize.height;
+                        context.drawImage(icon, (this.width - iconSize.width) / 2, 0, iconSize.width, iconSize.height);
+                    } else {
+                        offsetX = iconSize.width + 2;
+                        context.drawImage(icon, 0, (this.height - iconSize.height) / 2, iconSize.width, iconSize.height);
+                    }
+                }
+                context.font = fontsize + 'px ' + fontface;
+                context.fillStyle = color;
+                context.strokeStyle = '#ffffff';
+                context.lineWidth = 2;
+                context.strokeText(this.text, offsetX, fontsize + offsetY);
+                context.fillText(this.text, offsetX, fontsize + offsetY);
+            },
+        });
+    }
+
+    _updateMaterial_() {
+        this.material.needsUpdate = true;
+        this.scale.set(this.width / this.canvasScale, this.height / this.canvasScale, 1);
+    }
+
+    set needsUpdate(value) {
+        __needsUpdate__$1.set(this, value);
+        if (value && this.material) {
+            this._updateMaterial_();
+        }
+    }
+
+    get needsUpdate() {
+        return __needsUpdate__$1.get(this)
+    }
+
+    get width() {
+        return this.material.width
+    }
+
+    get height() {
+        return this.material.height
+    }
 }
 
 const updateBound = (function() {
@@ -48695,7 +47925,7 @@ const updateBound = (function() {
         mvPosition.project(map._camera);
 
         vpPosition.copy(mvPosition).applyMatrix4(map.viewportMatrix);
-
+        if (!this.material) return
         var rotation = this.material.rotation;
         var sin, cos;
         if (rotation !== 0) {
@@ -48713,93 +47943,93 @@ const updateBound = (function() {
     }
 })();
 
-Object.assign(Sprite.prototype, { updateBound });
-
-Label.prototype = Object.assign(Object.create(Sprite.prototype), {
-    constructor: Label,
-    isLabel: true,
-    setText(text) {
-        this.text = text;
-        let fontface = this.options['fontface'] || 'sans-serif';
-        let fontsize = this.options.fontsize || 16;
-        let color = this.options.color || 'rgba(0,0,0,1)';
-
-        let canvas = this.canvas;
-        canvas.width = 512;
-        let context = canvas.getContext('2d');
-        context.font = fontsize + 'px ' + fontface;
-        let metrics = context.measureText(this.text);
-        canvas.width = metrics.width || 1;
-        canvas.height = fontsize * 1.44;
-        context = canvas.getContext('2d');
-        context.font = fontsize + 'px ' + fontface;
-
-        // text color
-        context.fillStyle = color;
-
-        context.strokeStyle = '#ffffff';
-        context.lineWidth = 3;
-        context.strokeText(this.text, 0, fontsize);
-        context.fillText(this.text, 0, fontsize);
-
-        this.texture.needsUpdate = true;
-
-        this.originScale = this.scale.clone();
-        this.width = canvas.width;
-        this.height = canvas.height;
-        return
+Object.assign(Sprite.prototype, {
+    updateBound,
+    updateScale() {
+        this.scale.set(this.width / this.canvasScale, this.height / this.canvasScale, 1);
     },
 });
+mixinMapObject(Sprite);
 
-class Room extends MapObejct {
+mixinMapObject(Label, 'Label');
+
+class Room extends Mesh {
     constructor(floor, attr) {
-        super(attr);
+        super();
         this.floor = floor;
         this.info = attr;
         let { name } = attr;
         this.name = name;
+
+        this.initObject3D();
     }
 
-    makeObject3D() {
+    initObject3D() {
         let points = parsePoints(this.info.outline[0][0]);
-        let shape = new THREE$1.Shape(points);
-        let object = new THREE$1.Group();
+        let shape = new Shape(points);
 
-        let geometry, material, mesh;
+        let geometry, mesh;
 
-        geometry = new THREE$1.ShapeGeometry(shape);
-        let groundMaterial = new THREE$1.MeshStandardMaterial({
-            roughness: 0.8,
-            metalness: 0.5,
-        });
-        let textureLoader = new THREE$1.TextureLoader();
-        textureLoader.load('./textures/floor-board.jpg', function(map) {
-            map.wrapS = THREE$1.RepeatWrapping;
-            map.wrapT = THREE$1.RepeatWrapping;
-            map.anisotropy = 16;
-            map.repeat.set(0.005, 0.005);
-            map.minFilter = THREE$1.LinearFilter;
-            groundMaterial.map = map;
-            groundMaterial.needsUpdate = true;
-        });
-        mesh = new THREE$1.Mesh(geometry, groundMaterial);
-        mesh.position.set(0, 0, 1);
-        // object.add(mesh)
+        let extrudeSettings = {
+            depth: this.floor.info.height,
+            bevelEnabled: false,
+        };
+        let geometry3d = new ExtrudeGeometry(shape, extrudeSettings);
+        let geometry2d = new ShapeGeometry(shape);
+        this.geometry = geometry3d;
+        this.onThemeChange = theme => {
+            let roomStyle = theme.roomStyle[this.info.category] || theme.roomStyle['default'];
+            this.material = new MeshLambertMaterial(roomStyle);
+        };
+        let object = this;
+        object.onViewModeChange = is3dMode => {
+            object.geometry = is3dMode ? geometry3d : geometry2d;
+            object.position.setZ(is3dMode ? 0 : 1);
+        };
+        object.type = 'Room';
+        object.handler = this;
+        object.box = new Box2().setFromPoints(points);
+
+        geometry = new Geometry().setFromPoints(points);
+        let wire = new LineLoop(geometry);
+        wire.position.set(0, 0, this.floor.info.height);
+        wire.onViewModeChange = is3dMode => wire.position.setZ(is3dMode ? this.floor.info.height : 2);
+        wire.onThemeChange = theme => (wire.material = new LineBasicMaterial(theme.strokeStyle));
+        object.add(wire);
 
         if (this.info.walls) {
-            let material = new THREE$1.MeshPhongMaterial({
+            object.material.opacity = 0;
+            geometry = new ShapeGeometry(shape);
+            let groundMaterial = new MeshStandardMaterial({
+                roughness: 0.8,
+                metalness: 0.5,
+            });
+            let textureLoader = new TextureLoader();
+            textureLoader.load('./textures/floor-board.jpg', function(map) {
+                map.wrapS = RepeatWrapping;
+                map.wrapT = RepeatWrapping;
+                map.anisotropy = 16;
+                map.repeat.set(0.005, 0.005);
+                map.minFilter = LinearFilter;
+                groundMaterial.map = map;
+                groundMaterial.needsUpdate = true;
+            });
+            mesh = new Mesh(geometry, groundMaterial);
+            mesh.position.set(0, 0, 1);
+            object.add(mesh);
+            let material = new MeshPhongMaterial({
                 color: 0x156289,
                 emissive: 0x072534,
-                side: THREE$1.DoubleSide,
+                side: DoubleSide,
                 flatShading: true,
                 opacity: 0.5,
                 transparent: true,
             });
             this.info.walls.forEach(wall => {
                 let points = parsePoints(wall);
-                let geometry3d = new THREE$1.BoxGeometry(5, points[0].distanceTo(points[1]), this.floor.info.height);
-                let geometry2d = new THREE$1.PlaneGeometry(5, points[0].distanceTo(points[1]));
-                let cube = new THREE$1.Mesh(geometry3d, material);
+                let geometry3d = new BoxGeometry(5, points[0].distanceTo(points[1]), this.floor.info.height);
+                let geometry2d = new PlaneGeometry(5, points[0].distanceTo(points[1]));
+                let cube = new Mesh(geometry3d, material);
                 cube.position.set(
                     (points[0].x + points[1].x) / 2,
                     (points[0].y + points[1].y) / 2,
@@ -48812,44 +48042,22 @@ class Room extends MapObejct {
                 };
                 object.add(cube);
             });
-        } else {
-            let roomStyle =
-                this.mapStyle.roomStyle[this.info.category || this.info.type] || this.mapStyle.roomStyle['default'];
-            material = new THREE$1.MeshLambertMaterial(roomStyle);
-            let extrudeSettings = {
-                depth: this.floor.info.height,
-                bevelEnabled: false,
-            };
-            let geometry3d = new THREE$1.ExtrudeGeometry(shape, extrudeSettings);
-            let geometry2d = new THREE$1.ShapeGeometry(shape);
-            let mesh = new THREE$1.Mesh(geometry3d, material);
-            mesh.onViewModeChange = is3dMode => {
-                mesh.geometry = is3dMode ? geometry3d : geometry2d;
-                mesh.position.setZ(is3dMode ? 0 : 1);
-            };
-            object.add(mesh);
-
-            geometry = new THREE$1.Geometry().setFromPoints(points);
-            let wire = new THREE$1.LineLoop(geometry, new THREE$1.LineBasicMaterial(this.mapStyle.strokeStyle));
-            wire.position.set(0, 0, this.floor.info.height);
-            wire.onViewModeChange = is3dMode => wire.position.setZ(is3dMode ? this.floor.info.height : 2);
-            object.add(wire);
         }
         if (this.info.pillars) {
-            let material = new THREE$1.MeshLambertMaterial({
+            let material = new MeshLambertMaterial({
                 color: 0xffffff,
                 emissive: 0x555555,
             });
-            let box = new THREE$1.Box2(),
-                center = new THREE$1.Vector2(),
-                size = new THREE$1.Vector2();
+            let box = new Box2(),
+                center = new Vector2(),
+                size = new Vector2();
             this.info.pillars.forEach(pillar => {
                 let points = parsePoints(pillar);
                 box.setFromPoints(points).getCenter(center);
                 box.getSize(size);
-                let geometry3d = new THREE$1.BoxBufferGeometry(size.width, size.height, this.floor.info.height);
-                let geometry2d = new THREE$1.PlaneGeometry(size.width, size.height);
-                let cube = new THREE$1.Mesh(geometry3d, material);
+                let geometry3d = new BoxBufferGeometry(size.width, size.height, this.floor.info.height);
+                let geometry2d = new PlaneGeometry(size.width, size.height);
+                let cube = new Mesh(geometry3d, material);
                 cube.position.set(center.x, center.y, this.floor.info.height / 2);
                 cube.onViewModeChange = is3dMode => {
                     cube.geometry = is3dMode ? geometry3d : geometry2d;
@@ -48859,68 +48067,107 @@ class Room extends MapObejct {
             });
         }
 
-        object.name = 'room';
-        object.handler = this;
-        object.box = new THREE$1.Box2().setFromPoints(points);
-
         let sprite = new Label(this.info.name);
+        sprite.onThemeChange = theme => {
+            let material = theme.materialMap.get(this.info.category + '');
+            if (!material || !material.map || !material.map.image) {
+                sprite.options.icon = undefined;
+            } else {
+                sprite.options.icon = material.map.image;
+            }
+            sprite.needsUpdate = true;
+        };
         if (sprite) {
-            let center = object.box.getCenter(new THREE$1.Vector2());
+            let center = object.box.getCenter(new Vector2());
             sprite.position.set(center.x, center.y, this.floor.info.height + 5);
-            sprite.scale.set(sprite.width / this.canvasScale, sprite.height / this.canvasScale, 1);
             sprite.center.set(0.5, 0);
             sprite.onViewModeChange = is3dMode => sprite.position.setZ(is3dMode ? this.floor.info.height + 5 : 3);
             object.add(sprite);
         }
 
         object.label = sprite;
-
-        return object
     }
 }
 
-const PUB_POINT_SIZE$1 = new THREE$1.Vector2(18, 18);
+mixinMapObject(Room, 'Room');
 
-class PubPoint extends MapObejct {
+const PUB_POINT_SIZE$1 = new Vector2(24, 24);
+
+class PubPoint extends Sprite {
     constructor(attr, floor) {
-        super(attr);
+        super();
         this.info = attr;
         let { name } = attr;
         this.name = name;
         this.floor = floor;
-        this.center = new THREE$1.Vector2(this.info.outline[0][0][0], this.info.outline[0][0][1]);
-        this.boundBox = new THREE$1.Box2();
+        this.center = new Vector2(this.info.outline[0][0][0], this.info.outline[0][0][1]);
+        this.boundBox = new Box2();
+
+        this.initObject3D();
     }
 
-    render() {
-        if (!this.bounds) {
-            throw new Error('call updateOutline first')
-        }
-    }
-
-    makeObject3D() {
-        let material = this.mapStyle.materialMap.get(this.info.type);
-        let sprite = new THREE$1.Sprite(material);
+    initObject3D() {
+        let sprite = this;
+        sprite.onThemeChange = theme => {
+            if (theme.materialMap.has(this.info.type)) {
+                sprite.material = theme.materialMap.get(this.info.type);
+            }
+        };
         sprite.width = PUB_POINT_SIZE$1.width;
         sprite.height = PUB_POINT_SIZE$1.height;
         sprite.scale.set(PUB_POINT_SIZE$1.width / this.canvasScale, PUB_POINT_SIZE$1.height / this.canvasScale, 1);
-        sprite.position.copy(this.center).setZ(this.floor.info.height + 5);
+        this.scale.copy(sprite.scale);
+        this.position.copy(this.center).setZ(this.floor.info.height + 5);
         sprite.handler = this;
         sprite.center.set(0.5, 0);
-        sprite.boundBox = new THREE$1.Box2();
+        sprite.boundBox = new Box2();
         sprite.onViewModeChange = is3dMode => sprite.position.setZ(is3dMode ? this.floor.info.height + 5 : 3);
-        this.object3D = sprite;
-        return sprite
     }
 }
 
-class Floor extends MapObejct {
+mixinMapObject(PubPoint, 'PubPoint');
+
+class Floor extends Mesh {
     constructor(attr) {
-        super(attr);
+        super();
         this.info = attr;
+
+        let points = parsePoints(this.info.outline[0][0]).reverse();
+        let extrudeSettings = {
+            depth: 10,
+            bevelEnabled: false,
+        };
+        let shape = new Shape(points);
+        if (this.info.outline[1]) {
+            this.info.outline[1].map(array => {
+                shape.holes.push(new Path(parsePoints(array)));
+            });
+        }
+
+        let geometry3d = new ExtrudeBufferGeometry(shape, extrudeSettings);
+        let geometry2d = new ShapeGeometry(shape);
+        this.geometry = geometry2d;
+        let board = new Mesh(geometry3d);
+        this.onThemeChange = theme => {
+            this.material = new MeshPhongMaterial(theme.floor);
+            board.material = this.material;
+        };
+        this.add(board);
+        board.position.set(0, 0, -10);
+        board.onViewModeChange = is3dMode => (board.visible = is3dMode);
+
+        let floorHeight = this.info.height;
+        if (!floorHeight || floorHeight < 1e-4) {
+            floorHeight = 500.0;
+        }
+        this.info.height = floorHeight;
+        this.height = floorHeight;
+        this.handler = this;
+        this.type = 'Floor';
+        this.sprites = [];
+
         let { funcAreas: rooms, pubPoint } = attr;
         this.name = this.info.name;
-
         this.rooms = [];
         rooms.forEach(r => {
             this.rooms.push(new Room(this, r));
@@ -48929,99 +48176,32 @@ class Floor extends MapObejct {
         pubPoint.forEach(pp => {
             this.pubPoints.push(new PubPoint(pp, this));
         });
-
-        // this.outline = new Shape(this.info.outline[0][0])
-        // this.bounds = getBoundingRect(this.outline.getPoints())
+        this.initObject();
     }
 
-    makeObject3D() {
-        let object = new THREE$1.Group();
-        let floorHeight = this.info.height;
-        if (!floorHeight || floorHeight < 1e-4) {
-            floorHeight = 500.0;
-        }
-        this.info.height = floorHeight;
-
-        let points = parsePoints(this.info.outline[0][0]).reverse();
-        let extrudeSettings = {
-            depth: 10,
-            bevelEnabled: false,
-        };
-        let shape = new THREE$1.Shape(points);
-        if (this.info.outline[1]) {
-            this.info.outline[1].map(array => {
-                shape.holes.push(new THREE$1.Path(parsePoints(array)));
-            });
-        }
-
-        {
-            let geometry3d = new THREE$1.ExtrudeBufferGeometry(shape, extrudeSettings);
-            let geometry2d = new THREE$1.ShapeGeometry(shape);
-            let material = new THREE$1.MeshPhongMaterial(this.mapStyle.floor);
-            let mesh = new THREE$1.Mesh(geometry3d, material);
-            mesh.name = 'floor';
-            mesh.handler = this;
-            mesh.position.set(0, 0, -10);
-            mesh.onViewModeChange = is3dMode => {
-                mesh.geometry = is3dMode ? geometry3d : geometry2d;
-                mesh.position.setZ(is3dMode ? -10 : -1);
-            };
-            object.add(mesh);
-        }
-
-        object.height = floorHeight;
-
-        object.handler = this;
-        object.name = 'floor';
-        object.sprites = [];
-
+    initObject() {
         this.rooms
             .filter(r => r.name !== '中空区域')
             .forEach(room => {
-                let roomObj = room.makeObject3D();
-                object.sprites.push(roomObj.label);
-                object.add(roomObj);
+                this.sprites.push(room.label);
+                this.add(room);
             });
 
         this.pubPoints.forEach(pp => {
-            let pointObj = pp.makeObject3D();
-            object.sprites.push(pointObj);
-            object.add(pointObj);
-        });
-
-        this.object3D = object;
-        return object
-    }
-
-    render(context) {
-        context.beginPath();
-        this.drawOutline.getPoints().forEach((p, index) => {
-            if (index === 0) {
-                context.moveTo(p.x, -p.y);
-            } else {
-                context.lineTo(p.x, -p.y);
-            }
-        });
-        context.closePath();
-
-        context.fillStyle = '#e0e0e0';
-        context.fill();
-        context.strokeStyle = '#666666';
-        context.lineWidth = 1;
-        context.stroke();
-
-        this.rooms.forEach(room => {
-            room.render(context);
+            this.sprites.push(pp);
+            this.add(pp);
         });
     }
 }
 
-class Building extends MapObejct {
+mixinMapObject(Floor, 'Floor');
+
+class Building extends Group {
     constructor(attr = {}) {
-        super(attr.building);
+        super();
         let {
             building,
-            building: { groundFloors = 1, underFloors = 0, defaultFloor = 1 },
+            building: { groundFloors = 1, underFloors = 0, defaultFloor = 'F1' },
             floors = [],
             floorSize = floors.length,
         } = attr;
@@ -49046,7 +48226,7 @@ class Building extends MapObejct {
             this.floors.push(new Floor(f));
         });
 
-        this.object3D = this.makeObject3D();
+        this.initObject3D();
     }
 
     render(context) {
@@ -49057,45 +48237,46 @@ class Building extends MapObejct {
         this.getFloor(this.currentFloorNum).render(context);
     }
 
-    makeObject3D() {
-        let object = new THREE$1.Group();
-        object.name = 'building';
+    initObject3D() {
+        let object = this;
+        object.type = 'Building';
         object.sprites = [];
         this.floors.forEach(floor => {
-            let floorObj = floor.makeObject3D();
-            object.add(floorObj);
-            object.sprites.push(...floorObj.sprites);
-            floorObj.visible = this.getFloor(this.currentFloorNum) === floor;
+            object.add(floor);
+            object.sprites.push(...floor.sprites);
+            floor.visible = this.getFloor(this.currentFloorNum) === floor;
         });
 
         let points = parsePoints(this.info.outline[0][0]);
         if (points.length > 0) {
-            let shape = new THREE$1.Shape(points);
+            let shape = new Shape(points);
             let extrudeSettings = {
                 depth: object.children.map(a => a.height).reduce((a, b) => a + b) * 4,
                 bevelEnabled: false,
             };
-            let geometry = new THREE$1.ExtrudeGeometry(shape, extrudeSettings);
-            let mesh = new THREE$1.Mesh(geometry, new THREE$1.MeshBasicMaterial(this.mapStyle.building));
+            let geometry = new ExtrudeGeometry(shape, extrudeSettings);
+            let mesh = new Mesh(geometry);
+            mesh.onThemeChange = theme => {
+                mesh.material = new MeshBasicMaterial(theme.building);
+                mesh.material.depthTest = false;
+            };
             mesh.material.depthTest = false;
             object.outline = mesh;
             // object.add(mesh)
         }
 
-        object.rotateOnAxis(new THREE$1.Vector3(1, 0, 0), -Math.PI / 2);
-        object.handler = this;
-        return object
+        object.rotateOnAxis(new Vector3(1, 0, 0), -Math.PI / 2);
     }
 
     updateBound(map) {
         this.floors.forEach(floor => {
             if (this.showAll || floor.name === this.currentFloorNum) {
-                for (let i in floor.object3D.sprites) {
-                    const sprite1 = floor.object3D.sprites[i];
+                for (let i in floor.sprites) {
+                    const sprite1 = floor.sprites[i];
                     sprite1.updateBound(map);
                     sprite1.visible = true;
                     for (let j = 0; j < i; j++) {
-                        const sprite2 = floor.object3D.sprites[j];
+                        const sprite2 = floor.sprites[j];
                         if (sprite2.visible && sprite2.boundBox.intersectsBox(sprite1.boundBox)) {
                             sprite1.visible = false;
                             break
@@ -49112,33 +48293,29 @@ class Building extends MapObejct {
         }
         this.currentFloorNum = floorNum;
         this.showAll = false;
-        if (this.object3D) {
-            this.object3D.visible = true;
-            // this.object3D.outline && (this.object3D.outline.visible = false)
-            this.object3D.children
-                .filter(obj => obj.name === 'floor')
-                .forEach(obj => {
-                    obj.visible = obj.handler === this.getFloor(floorNum) || obj.handler.name === floorNum;
-                    obj.position.set(0, 0, 0);
-                });
-            this.object3D.scale.set(1, 1, 1);
-        }
+        this.visible = true;
+        // this.object3D.outline && (this.object3D.outline.visible = false)
+        this.children
+            .filter(obj => obj.isFloor)
+            .forEach(obj => {
+                obj.visible = obj === this.getFloor(floorNum) || obj.name === floorNum;
+                obj.position.set(0, 0, 0);
+            });
+        this.scale.set(1, 1, 1);
     }
 
     showAllFloors(showAll = true) {
         this.showAll = showAll;
-        if (this.object3D) {
-            this.object3D.visible = true;
-            // this.object3D.outline && (this.object3D.outline.visible = true)
-            let offset = 4;
-            this.object3D.children.forEach((obj, index) => {
-                obj.visible = true;
-                if (obj.name === 'floor') {
-                    obj.position.set(0, 0, index * obj.height * offset);
-                }
-            });
-            this.object3D.scale.set(1, 1, 1);
-        }
+        this.visible = true;
+        // this.object3D.outline && (this.object3D.outline.visible = true)
+        let offset = 4;
+        this.children.forEach((obj, index) => {
+            obj.visible = true;
+            if (obj.isFloor) {
+                obj.position.set(0, 0, index * obj.height * offset);
+            }
+        });
+        this.scale.set(1, 1, 1);
     }
 
     getCurrentFloor() {
@@ -49150,14 +48327,16 @@ class Building extends MapObejct {
     }
 }
 
-class MapLoader {
+mixinMapObject(Building, 'Building');
+
+class MapLoader extends Loader {
     constructor(is3d) {
-        THREE$1.Loader.call(this, is3d);
+        super();
 
         this.withCredentials = false;
         this.is3d = is3d;
 
-        this.jsonLoader = new THREE$1.FileLoader();
+        this.jsonLoader = new FileLoader();
     }
 
     load(url) {
@@ -49166,6 +48345,7 @@ class MapLoader {
                 url,
                 json => {
                     let data = JSON.parse(json);
+                    window.building = data;
                     resolve(this.parse(data));
                 },
                 undefined,
@@ -49178,10 +48358,9 @@ class MapLoader {
     }
 }
 
-Object.assign(MapLoader.prototype, Object.create(THREE$1.Loader.prototype).__proto__);
-
 var themeNormal = {
     name: 'test',
+    background: '#f9f9f9',
     building: {
         color: '#000000',
         opacity: 0.1,
@@ -49206,21 +48385,30 @@ var themeNormal = {
         fontface: 'Helvetica, MicrosoftYaHei ',
     },
     pubPointImg: {
-        '11001': 'img/toilet.png',
-        '11002': 'img/ATM.png',
-        '21001': 'img/stair.png',
-        '21002': 'img/escalator.png',
-        '21003': 'img/lift.png',
-        '22006': 'img/entry.png',
+        '11001': 'img/100001.png',
+        '11002': 'img/150001.png',
+        '21001': 'img/170001.png',
+        '21002': 'img/170003.png',
+        '21003': 'img/170006.png',
+        '22006': 'img/110001.png',
+        '101': 'img/canyinmeishi.png',
+        '102': 'img/chaoshi.png',
+        '103': 'img/dianqishangcheng.png',
+        '104': 'img/lvxingshe.png',
+        '105': 'img/shangdian.png',
+        '106': 'img/tiyuyongpin.png',
+        '107': 'img/yule.png',
+        '108': 'img/xiyidian.png',
+        '109': 'img/zhubaoshoushi.png',
     },
     roomStyle: {
         '101': {
-            color: '#1f77b4',
+            color: '#F8D5D3',
             opacity: 0.7,
             transparent: true,
         },
         '102': {
-            color: '#aec7e8',
+            color: '#F8D2B4',
             opacity: 0.7,
             transparent: true,
         },
@@ -49245,7 +48433,7 @@ var themeNormal = {
             transparent: true,
         },
         '107': {
-            color: '#dbdb8d',
+            color: '#E1B4F8',
             opacity: 0.7,
             transparent: true,
         },
@@ -49265,33 +48453,49 @@ var themeNormal = {
             transparent: true,
         },
         '400': {
-            color: '#D3D3D3',
+            color: '#E2E0D0',
             opacity: 0.7,
             transparent: true,
         },
         default: {
-            color: '#c49c94',
+            color: '#D6D9F8',
             opacity: 0.4,
             transparent: true,
         },
     },
 };
 
-class ThemeLoader {
+class ThemeLoader extends Loader {
     constructor() {
-        this.jsonLoader = new THREE$1.FileLoader();
-        this.textureLoader = new THREE$1.TextureLoader();
+        super();
+        this.jsonLoader = new FileLoader();
+        this.textureLoader = new TextureLoader();
         this.themeMap = new Map();
 
         this._loadTheme('normal', themeNormal);
     }
 
     load(name, url) {
-        this.jsonLoader.load(url, json => this._loadTheme(name, json), undefined, e => console.error(e));
+        return new Promise((resolve, reject) => {
+            if (this.themeMap.has(name)) {
+                reject(new Error('duplicate theme name'));
+                return
+            }
+            this.jsonLoader.load(
+                url,
+                json => {
+                    resolve(this._loadTheme(name, json));
+                },
+                undefined,
+                e => {
+                    reject(e);
+                }
+            );
+        })
     }
 
     getTheme(name = 'normal') {
-        return this.themeMap.get(name) || this.themeMap.get('normal')
+        return this.themeMap.get(name)
     }
 
     _loadTheme(name, theme) {
@@ -49304,8 +48508,8 @@ class ThemeLoader {
                     t.needsUpdate = true;
                     this.textureUpdated = true;
                 });
-                texture.minFilter = THREE$1.LinearFilter;
-                let material = new THREE$1.SpriteMaterial({
+                texture.minFilter = LinearFilter;
+                let material = new SpriteMaterial({
                     map: texture,
                     sizeAttenuation: false,
                     transparent: true,
@@ -49314,21 +48518,39 @@ class ThemeLoader {
                 theme.materialMap.set(k, material);
             });
         }
-        this.themeUpdated = true;
+        return theme
     }
 }
 
-Object.assign(ThemeLoader.prototype, Object.create(THREE$1.Loader.prototype).__proto__);
+function changeTheme(mo, theme) {
+    function changeTheme(object) {
+        if (object.onThemeChange) object.onThemeChange(theme);
+        if (object.children && object.children.length > 0) {
+            object.children.forEach(obj => changeTheme(obj));
+        }
+    }
+    mo.building && changeTheme(mo.building);
+}
+
+function injectMapInstance(mo, object) {
+    if (object.isMapObject) {
+        object.$map = mo;
+        if (object.updateScale) object.updateScale();
+    }
+    object.children.forEach(obj => injectMapInstance(mo, obj));
+}
 
 function loaderMixin(XMap) {
     Object.assign(XMap.prototype, {
         load(fileName) {
             this.mapLoader.load(fileName).then(building => {
-                this.floorControl.show(this.$controlWrapper, building);
+                this.floorControl.show(building);
                 this.building = building;
-                this.renderer.setClearColor('#ffffff');
-                this._scene.add(building.object3D);
-                // building.showAllFloors()
+                changeTheme(this, this.themeLoader.getTheme(this._currentTheme));
+                injectMapInstance(this, this.building);
+                this.renderer.setClearColor(this.themeLoader.getTheme().background);
+                this._scene.add(building);
+
                 building.showFloor('F1');
                 this.dispatchEvent({ type: 'mapLoaded' });
                 this._overlays.forEach(overlay => this._addOverlay(overlay));
@@ -49344,7 +48566,18 @@ function loaderMixin(XMap) {
             });
         },
 
-        loadTheme() {},
+        loadTheme(name, url) {
+            return this.themeLoader.load(name, url)
+        },
+
+        setTheme(name) {
+            let theme = this.themeLoader.getTheme(name);
+            if (!theme) {
+                throw new Error('theme not exists')
+            }
+            this._currentTheme = name;
+            changeTheme(this, theme);
+        },
 
         getMapStyle() {
             return this.themeLoader.getTheme()
@@ -49358,7 +48591,6 @@ function initLoaders(mo) {
 }
 
 function initMixin(XMap) {
-    Object.assign(XMap.prototype, EventDispatcher.prototype);
     Object.assign(XMap.prototype, {
         _init(el, options) {
             this.options = options;
@@ -49370,12 +48602,10 @@ function initMixin(XMap) {
             initView(this);
 
             this.control = new OrbitControl(this._camera, this.$mapWrapper);
-            this.floorControl = new FloorControl(this._camera, this.$mapWrapper);
+            this.floorControl = new FloorControl(this);
 
             initEvent(this);
             initLoaders(this);
-
-            mapObejctMixins(this);
             overlayMixins(this);
 
             window.map = this;
@@ -49452,7 +48682,7 @@ function styleInject(css, ref) {
   }
 }
 
-var css = ".imap-controls, .imap-overlays {\r\n    position: absolute;\r\n    top: 0;\r\n    left: 0;\r\n    width: -webkit-fill-available;\r\n    height: -webkit-fill-available;\r\n    pointer-events: none;\r\n    overflow: hidden;\r\n}\r\n\r\n.imap-controls *, .imap-overlays * {\r\n    pointer-events: auto;\r\n}\r\n\r\n.imap-floor-control {\r\n    position: absolute;\r\n    right: 10px;\r\n    top: 10px;\r\n    z-index: 100;\r\n    background: white;\r\n    border: solid 1px #dfdfdf;\r\n    text-align: center;\r\n    border-radius: 3px;\r\n    font-size: 14px;\r\n    padding: 0;\r\n}\r\n\r\n.imap-floor-control li {\r\n    list-style: none;\r\n    line-height: 25px;\r\n    width: 25px;\r\n    height: 25px;\r\n    border-bottom: solid 1px #dfdfdf;\r\n}\r\n\r\n.imap-floor-control li:last-child {\r\n    border-bottom: none;\r\n}";
+var css = ".imap-controls, .imap-overlays {\r\n    position: static;\r\n    top: 0;\r\n    left: 0;\r\n    pointer-events: none;\r\n    overflow: hidden;\r\n}\r\n\r\n.imap-controls *, .imap-overlays * {\r\n    pointer-events: auto;\r\n}\r\n\r\n.imap-floor-control {\r\n    position: absolute;\r\n    right: 10px;\r\n    top: 10px;\r\n    z-index: 100;\r\n    background: white;\r\n    border: solid 1px #dfdfdf;\r\n    text-align: center;\r\n    border-radius: 3px;\r\n    font-size: 14px;\r\n    padding: 0;\r\n}\r\n\r\n.imap-floor-control li {\r\n    list-style: none;\r\n    line-height: 40px;\r\n    width: 40px;\r\n    height: 40px;\r\n    border-bottom: solid 1px #dfdfdf;\r\n}\r\n\r\n.imap-floor-control li:last-child {\r\n    border-bottom: none;\r\n}";
 styleInject(css);
 
 class XMap {
@@ -49473,16 +48703,26 @@ class Location {
         this.x = x;
         this.y = y;
         this.z = z;
-        this.localPosition = new THREE$1.Vector3(x, y, z);
+        this.localPosition = new Vector3(x, y, z);
+    }
+}
+
+class Size {
+    constructor(width, height = width) {
+        this.width = width;
+        this.height = height;
     }
 }
 
 var Models = {
     Location,
+    Size,
 };
 
+// import Label from './label'
+
 var Objects = {
-    Label,
+    // Label,
 };
 
 var index = {
@@ -49490,8 +48730,7 @@ var index = {
     ...Constants,
     ...Models,
     ...Overlays,
-    ...THREE$1,
-    ...Objects,
+    ...Objects
 };
 
 export default index;

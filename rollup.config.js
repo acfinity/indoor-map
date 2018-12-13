@@ -15,24 +15,33 @@ process.env = {
     ...config.prod.env,
 }
 const buildMode = process.env.BUILD_MODE || 'normal'
-const output = [
-    {
-        format: 'umd',
-        name: 'XMap',
-        file: 'build/xmap.js',
-        indent: '\t',
-    },
-    {
-        format: 'es',
-        file: 'build/xmap.module.js',
-        indent: '\t',
-    },
-]
-buildMode == 'closure' && output.splice(1)
+const outputConfig = {
+    normal: [
+        {
+            format: 'umd',
+            name: 'XMap',
+            file: 'build/xmap.js',
+            indent: '\t',
+        },
+        {
+            format: 'es',
+            file: 'build/xmap.module.js',
+            indent: '\t',
+        },
+    ],
+    closure: [
+        {
+            format: 'umd',
+            name: 'XMap',
+            file: 'build/xmap.min.js',
+            minify: true,
+        },
+    ],
+}
 
 export default {
     input: 'src/index.js',
-    output: output,
+    output: outputConfig[buildMode],
     plugins: [
         eslint({
             include: ['src/**/*.js'],
