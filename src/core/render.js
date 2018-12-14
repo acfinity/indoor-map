@@ -8,23 +8,33 @@ function updateModels(mo) {
         }))
         .sort((a, b) => b.position.distance - a.position.distance)
         .forEach((it, index) => {
-            it.overlay.render({
-                x: it.position.x,
-                y: it.position.y,
-                zIndex: index + 10,
-            })
+            if (it.position.distance === Infinity) {
+                it.overlay.render({
+                    x: 0,
+                    y: 0,
+                    zIndex: -100,
+                })
+            } else {
+                it.overlay.render({
+                    x: it.position.x,
+                    y: it.position.y,
+                    zIndex: index + 10,
+                })
+            }
         })
+}
+
+export function startRenderer(mo) {
+    mo.render()
 }
 
 export function renderMixin(XMap) {
     Object.assign(XMap.prototype, {
         render() {
-            this.renderStarted = true
             requestAnimationFrame(() => this.render())
-            this.control.update()
-
-            if (this.control.viewChanged) {
-                this.control.viewChanged = false
+            if (!this.building) return
+            if (this.needsUpdate) {
+                this._update_()
                 this._camera.updateProjectionMatrix()
                 this.updateProjectionMatrix = true
                 updateModels(this)

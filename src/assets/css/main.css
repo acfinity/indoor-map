@@ -1,7 +1,9 @@
 .imap-controls, .imap-overlays {
-    position: static;
-    top: 0;
+    width: inherit;
+    height: inherit;
+    position: absolute;
     left: 0;
+    top: 0;
     pointer-events: none;
     overflow: hidden;
 }

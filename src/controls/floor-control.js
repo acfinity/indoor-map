@@ -43,6 +43,7 @@ class FloorControl extends BaseControl {
             this.building.showAllFloors()
         }
         this.building.updateBound(this.map)
+        this.map.dispatchEvent({ type: 'floorChanged', message: { floor } })
     }
 }
 

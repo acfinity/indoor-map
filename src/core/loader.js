@@ -35,10 +35,7 @@ export function loaderMixin(XMap) {
                 this._overlays.forEach(overlay => this._addOverlay(overlay))
 
                 this.setDefaultView()
-                if (!this.renderStarted) {
-                    this.renderStarted = true
-                    this.render()
-                }
+
                 this.renderer.domElement.style.opacity = 1
                 this.building.updateBound(this)
                 this.setViewMode(this.options.viewMode)

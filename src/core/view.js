@@ -8,43 +8,13 @@ import {
     AmbientLight,
     DirectionalLight,
 } from '../libs/threejs/three.module'
-import { ViewMode } from '../constants'
 import { addEvent } from '../utils/event'
 
 const PERSPECTIVE_FOV = 20
 
-function changeViewMode(mo, is3dMode) {
-    mo.control.changeViewMode(is3dMode)
-    function changeMode(object) {
-        if (object.onViewModeChange) object.onViewModeChange(is3dMode)
-        if (object.children && object.children.length > 0) {
-            object.children.forEach(obj => changeMode(obj))
-        }
-    }
-    changeMode(mo.building)
-}
-
 export function viewMixin(XMap) {
     Object.assign(XMap.prototype, {
         setDefaultView() {
-            let camAngle = Math.PI / 2
-            let camDir = [Math.cos(camAngle), Math.sin(camAngle)]
-            let camLen = 5000
-            let tiltAngle = (75.0 * Math.PI) / 180.0
-            this._camera.position.set(-camDir[1] * camLen, Math.sin(tiltAngle) * camLen, camDir[0] * camLen)
-            this._camera.lookAt(this._scene.position)
-
-            this.control.reset()
-            this.control.viewChanged = true
-            return this
-        },
-
-        setViewMode(mode) {
-            if ((mode !== ViewMode.MODE_2D && mode !== ViewMode.MODE_3D) || mode === this._currentViewMode) {
-                return
-            }
-            this._currentViewMode = mode
-            changeViewMode(this, mode === ViewMode.MODE_3D)
         },
 
         locationToViewport: (function() {
@@ -52,14 +22,15 @@ export function viewMixin(XMap) {
             const screenPosition = new Vector4()
             return function parseLocation(location) {
                 worldPosition.copy(location)
-                let floor = this.building.getFloor(location.floor)
+                let floor = this.building && this.building.getFloor(location.floor)
                 if (!floor) {
                     throw new Error('invalid floor')
                 }
-                if (!floor.visible) {
+                if (!floor || !floor.visible) {
                     return {
                         x: -Infinity,
                         y: -Infinity,
+                        distance: Infinity,
                     }
                 } else {
                     floor.localToWorld(worldPosition)

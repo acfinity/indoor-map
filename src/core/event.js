@@ -3,16 +3,25 @@ import { Vector2, Vector3, Raycaster, EventDispatcher } from '../libs/threejs/th
 export function eventMixin(Class) {
     Object.assign(Class.prototype, EventDispatcher.prototype)
     const eventMap = new Map()
+    const bindEvent = (mo, eventType, fn, once) => {
+        let thisMap = eventMap.get(mo)
+        if (!thisMap) {
+            thisMap = new Map()
+            eventMap.set(mo, thisMap)
+        }
+        let listener = event => {
+            once && mo.off(eventType, fn)
+            fn(event.message)
+        }
+        thisMap.set(fn, listener)
+        mo.addEventListener(eventType, listener)
+    }
     Object.assign(Class.prototype, {
         on(eventType, fn) {
-            let thisMap = eventMap.get(this)
-            if (!thisMap) {
-                thisMap = new Map()
-                eventMap.set(this, thisMap)
-            }
-            let listener = event => fn(event.message)
-            thisMap.set(fn, listener)
-            this.addEventListener(eventType, listener)
+            bindEvent(this, eventType, fn)
+        },
+        once(eventType, fn) {
+            bindEvent(this, eventType, fn, true)
         },
         off(eventType, fn) {
             let thisMap = eventMap.get(this)
@@ -53,7 +62,7 @@ export const initEvent = (function() {
         )
     }
     return function(mo) {
-        mo.control.onClickListener = e => {
+        mo.gestureControl.onClickListener = e => {
             let intersects = intersectObjects('click', mo, e)
             if (!intersects || intersects.length === 0) {
                 return
@@ -83,7 +92,7 @@ export const initEvent = (function() {
                 }
             }
         }
-        mo.control.onHoverListener = e => {
+        mo.gestureControl.onHoverListener = e => {
             let intersects = intersectObjects('hover', mo, e)
             if (!intersects || intersects.length === 0) {
                 return

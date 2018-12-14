@@ -1,9 +1,11 @@
-import OrbitControl from '../controls/orbit-control'
+import GestureControl from '../controls/gesture-control'
 import FloorControl from '../controls/floor-control'
 import { overlayMixins } from '../overlay/index.js'
 import { initView } from './view'
 import { initEvent } from './event'
 import { initLoaders } from './loader'
+import { startRenderer } from './render'
+import { initState } from './state'
 
 export function initMixin(XMap) {
     Object.assign(XMap.prototype, {
@@ -14,14 +16,16 @@ export function initMixin(XMap) {
 
             this._overlays = new Set()
 
+            initState(this)
             initView(this)
 
-            this.control = new OrbitControl(this._camera, this.$mapWrapper)
+            this.gestureControl = new GestureControl(this)
             this.floorControl = new FloorControl(this)
 
             initEvent(this)
             initLoaders(this)
             overlayMixins(this)
+            startRenderer(this)
 
             window.map = this
         },
