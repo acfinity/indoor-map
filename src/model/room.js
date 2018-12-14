@@ -18,6 +18,7 @@ import {
     DoubleSide,
     LinearFilter,
     RepeatWrapping,
+    Color,
 } from '../libs/threejs/three.module'
 import { mixinMapObject } from './map-object'
 import { parsePoints } from '../utils/view'
@@ -47,10 +48,6 @@ class Room extends Mesh {
         let geometry3d = new ExtrudeGeometry(shape, extrudeSettings)
         let geometry2d = new ShapeGeometry(shape)
         this.geometry = geometry3d
-        this.onThemeChange = theme => {
-            let roomStyle = theme.roomStyle[this.info.category] || theme.roomStyle['default']
-            this.material = new MeshLambertMaterial(roomStyle)
-        }
         let object = this
         object.onViewModeChange = is3dMode => {
             object.geometry = is3dMode ? geometry3d : geometry2d
@@ -64,8 +61,16 @@ class Room extends Mesh {
         let wire = new LineLoop(geometry)
         wire.position.set(0, 0, this.floor.info.height)
         wire.onViewModeChange = is3dMode => wire.position.setZ(is3dMode ? this.floor.info.height : 2)
-        wire.onThemeChange = theme => (wire.material = new LineBasicMaterial(theme.strokeStyle))
         object.add(wire)
+
+        this.onThemeChange = theme => {
+            let roomStyle = theme.roomStyle[this.info.category] || theme.roomStyle['default']
+            this.material = new MeshLambertMaterial(roomStyle)
+            wire.material = new LineBasicMaterial({
+                ...theme.strokeStyle,
+                color: new Color(roomStyle.color).multiplyScalar(0.5),
+            })
+        }
 
         if (this.info.walls) {
             object.material.opacity = 0
