@@ -27,8 +27,10 @@ class Label extends Sprite {
 
     _initMaterial_() {
         let icon, iconPosition, iconSize
-        let fontface = this.options.fontsize || 'sans-serif'
-        let fontsize = this.options.fontsize || 16
+        let fontface = this.options.fontface || 'sans-serif'
+        let fontsize = this.options.fontSize || 15
+        let strokeColor = this.options.strokeColor || 'white'
+        let strokeWidth = this.options.strokeWidth || 3
         let color = this.options.color || 'rgba(0,0,0,1)'
         this.material = new SpriteCanvasMaterial({
             measure: context => {
@@ -48,26 +50,40 @@ class Label extends Sprite {
                 } else {
                     icon = null
                 }
+                width += strokeWidth * 2
+                height += strokeWidth * 2
                 return { width, height }
             },
-            compile: context => {
-                let offsetX = 0,
-                    offsetY = 0
+            compile: (context, scale) => {
+                let offsetX = strokeWidth,
+                    offsetY = strokeWidth
                 if (icon) {
                     if (iconPosition == 'top') {
-                        offsetY = iconSize.height
-                        context.drawImage(icon, (this.width - iconSize.width) / 2, 0, iconSize.width, iconSize.height)
+                        context.drawImage(
+                            icon,
+                            ((this.width - iconSize.width) / 2) * scale,
+                            offsetY * scale,
+                            iconSize.width * scale,
+                            iconSize.height * scale
+                        )
+                        offsetY += iconSize.height
                     } else {
-                        offsetX = iconSize.width + 2
-                        context.drawImage(icon, 0, (this.height - iconSize.height) / 2, iconSize.width, iconSize.height)
+                        context.drawImage(
+                            icon,
+                            offsetX * scale,
+                            ((this.height - iconSize.height) / 2) * scale,
+                            iconSize.width * scale,
+                            iconSize.height * scale
+                        )
+                        offsetX += iconSize.width + 2
                     }
                 }
-                context.font = fontsize + 'px ' + fontface
+                context.font = fontsize * scale + 'px ' + fontface
                 context.fillStyle = color
-                context.strokeStyle = '#ffffff'
-                context.lineWidth = 2
-                context.strokeText(this.text, offsetX, fontsize + offsetY)
-                context.fillText(this.text, offsetX, fontsize + offsetY)
+                context.strokeStyle = strokeColor
+                context.lineWidth = strokeWidth * scale
+                context.strokeText(this.text, offsetX * scale, (fontsize + offsetY) * scale)
+                context.fillText(this.text, offsetX * scale, (fontsize + offsetY) * scale)
             },
         })
     }

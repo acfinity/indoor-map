@@ -1,6 +1,7 @@
 import { SpriteMaterial, Texture, LinearFilter } from '../three.module'
 
 const __needsUpdate__ = new Map()
+const canvasScale = 2
 
 class SpriteCanvasMaterial extends SpriteMaterial {
     constructor({ measure, compile }) {
@@ -26,11 +27,10 @@ class SpriteCanvasMaterial extends SpriteMaterial {
             canvas.width = 512
             canvas.height = 512
             let size = this.measure(canvas.getContext('2d'))
-            canvas.width = Math.ceil(size.width)
-            canvas.height = Math.ceil(size.height)
+            canvas.width = Math.ceil(size.width * canvasScale)
+            canvas.height = Math.ceil(size.height * canvasScale)
             let context = canvas.getContext('2d')
-            context.imageSmoothingEnabled = true
-            this.compile(context)
+            this.compile(context, canvasScale)
             this.map.needsUpdate = true
         }
     }
@@ -40,11 +40,11 @@ class SpriteCanvasMaterial extends SpriteMaterial {
     }
 
     get width() {
-        return this.map.image.width
+        return this.map.image.width / canvasScale
     }
 
     get height() {
-        return this.map.image.height
+        return this.map.image.height / canvasScale
     }
 }
 

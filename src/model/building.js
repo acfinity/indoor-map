@@ -114,12 +114,10 @@ class Building extends Group {
     showAllFloors(showAll = true) {
         this.showAll = showAll
         this.visible = true
-        // this.object3D.outline && (this.object3D.outline.visible = true)
-        let offset = 4
         this.children.forEach((obj, index) => {
             obj.visible = true
             if (obj.isFloor) {
-                obj.position.set(0, 0, index * obj.height * offset)
+                obj.position.set(0, 0, index * 1000)
             }
         })
         this.scale.set(1, 1, 1)
