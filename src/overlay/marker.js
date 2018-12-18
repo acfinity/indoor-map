@@ -28,7 +28,7 @@ class Marker extends Overlay {
             sizeAttenuation: false,
             transparent: true,
             alphaTest: 0.1,
-            // depthTest: false,
+            depthTest: false,
         })
 
         let sprite = new Sprite(this.material)

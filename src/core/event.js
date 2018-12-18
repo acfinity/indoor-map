@@ -1,5 +1,7 @@
 import { Vector2, Vector3, Raycaster, EventDispatcher } from '../libs/threejs/three.module'
 
+const __preHover__ = new WeakMap()
+
 export function eventMixin(Class) {
     Object.assign(Class.prototype, EventDispatcher.prototype)
     const eventMap = new Map()
@@ -40,7 +42,6 @@ export const initEvent = (function() {
     const raycaster = new Raycaster()
     const mouse = new Vector2()
     const vector = new Vector3(mouse.x, mouse.y, 0.5)
-    // let preHoveredEntity = undefined
     const intersectObjects = function(eventType, mo, e) {
         if (!mo.building) {
             return
@@ -67,15 +68,12 @@ export const initEvent = (function() {
             if (!intersects || intersects.length === 0) {
                 return
             }
-            let overlay
-            if (intersects[0].object.handler && intersects[0].object.handler.isOverlay) {
-                overlay = intersects[0].object.handler
-                intersects[0].object.handler.dispatchEvent({ type: 'click', message: { overlay, domEvent: e } })
+            let overlay,
+                fo = intersects.filter(it => it.object.isFloor || (it.object.handler && it.object.handler.isOverlay))
+            if (fo[0] && fo[0].object.handler && fo[0].object.handler.isOverlay) {
+                overlay = fo[0].object.handler
+                fo[0].object.handler.dispatchEvent({ type: 'click', message: { overlay, domEvent: e } })
             }
-            intersects
-                .filter(it => it.object.isRoom)
-                .splice(0, 1)
-                .forEach(it => it.object.dispatchEvent({ type: 'click' }))
             if (mo.hasEventListener('click')) {
                 let floor = intersects.filter(it => it.object.isFloor)[0]
                 if (floor) {
@@ -97,24 +95,31 @@ export const initEvent = (function() {
             if (!intersects || intersects.length === 0) {
                 return
             }
-            // let hoveredEntity = null
-            // if (intersects[0].object.handler && intersects[0].object.handler.isOverlay) {
-            //     intersects[0].object.handler.dispatchEvent('click', { domEvent: e })
-            //     // overlay = intersects[0].object.handler
-            // }
-            // if (hoveredEntity && hoveredEntity.object === preHoveredEntity) {
-            //     return
-            // } else {
-            //     if (this._hoveredEntity != null) {
-            //         this._hoveredEntity.handler.onHover && preHoveredEntity.handler.onHover(false)
-            //     }
-            //     if (hoveredEntity != null) {
-            //         this._hoveredEntity = hoveredEntity.object
-            //         this._hoveredEntity.handler.onHover && preHoveredEntity.handler.onHover(true)
-            //     } else {
-            //         this._hoveredEntity = null
-            //     }
-            // }
+            let overlay,
+                preHover = __preHover__.get(this),
+                fo = intersects.filter(it => it.object.isFloor || (it.object.handler && it.object.handler.isOverlay))
+            if (fo[0] && fo[0].object.handler && fo[0].object.handler.isOverlay) {
+                overlay = fo[0].object.handler
+            }
+            if (preHover != overlay) {
+                overlay && overlay.dispatchEvent({ type: 'hover', message: { overlay, domEvent: e, hovered: true } })
+                preHover && preHover.dispatchEvent({ type: 'hover', message: { overlay, domEvent: e, hovered: false } })
+            }
+            if (mo.hasEventListener('hover')) {
+                let floor = intersects.filter(it => it.object.isFloor)[0]
+                if (floor) {
+                    mo.dispatchEvent({
+                        type: 'hover',
+                        message: {
+                            x: Math.round(floor.point.x),
+                            y: -Math.round(floor.point.z),
+                            floor: floor.object.handler.name,
+                            overlay,
+                            domEvent: e,
+                        },
+                    })
+                }
+            }
         }
     }
 })()
