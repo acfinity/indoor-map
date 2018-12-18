@@ -17,7 +17,6 @@ class MapLoader extends Loader {
                 url,
                 json => {
                     let data = JSON.parse(json)
-                    window.building = data
                     resolve(this.parse(data))
                 },
                 undefined,

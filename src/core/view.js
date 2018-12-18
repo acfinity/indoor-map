@@ -65,11 +65,11 @@ function initDom(mo) {
     mo.$wrapper.appendChild(mo.$mapWrapper)
 
     mo.$overlayWrapper = document.createElement('div')
-    mo.$overlayWrapper.className = 'imap-overlays'
+    mo.$overlayWrapper.className = 'xmap-overlays'
     mo.$wrapper.appendChild(mo.$overlayWrapper)
 
     mo.$controlWrapper = document.createElement('div')
-    mo.$controlWrapper.className = 'imap-controls'
+    mo.$controlWrapper.className = 'xmap-controls'
     mo.$wrapper.appendChild(mo.$controlWrapper)
 }
 
@@ -96,6 +96,7 @@ function initThree(mo) {
 
     mo.renderer = new WebGLRenderer({
         antialias: true,
+        alpha: true
     })
     mo.renderer.autoClear = false
     mo.renderer.setClearColor('#ffffff')

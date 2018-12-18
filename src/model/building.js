@@ -1,7 +1,10 @@
-import { Vector3, Shape, Group, Mesh, ExtrudeGeometry, MeshBasicMaterial } from '../libs/threejs/three.module'
+import { Vector3, Group } from '../libs/threejs/three.module'
 import { mixinMapObject } from './map-object'
 import Floor from './floor'
-import { parsePoints } from '../utils/view'
+import TWEEN from '../libs/Tween'
+import { ViewMode } from '../constants'
+
+const FLOOR_SPACE = 600
 
 class Building extends Group {
     constructor(attr = {}) {
@@ -23,10 +26,6 @@ class Building extends Group {
         }
         this.groundFloor = groundFloors
         this.underFloor = underFloors
-        this.showFloor(defaultFloor)
-
-        // this.outline = new Shape(this.info.outline[0][0])
-        // this.bounds = this.getBoundingRect(this.outline.getPoints())
 
         this.floors = []
         floors.forEach(f => {
@@ -34,50 +33,33 @@ class Building extends Group {
         })
 
         this.initObject3D()
-    }
 
-    render(context) {
-        if (!this.drawOutline) {
-            throw new Error('call updateOutline first')
+        this.showFloor(defaultFloor)
+
+        this.onViewModeChange = () => {
+            this.showAllFloors()
         }
-
-        this.getFloor(this.currentFloorNum).render(context)
     }
 
     initObject3D() {
         let object = this
         object.type = 'Building'
         object.sprites = []
-        this.floors.forEach(floor => {
+        this.floors.forEach((floor, index) => {
             object.add(floor)
             object.sprites.push(...floor.sprites)
-            floor.visible = this.getFloor(this.currentFloorNum) === floor
+            floor.position.setZ(index * FLOOR_SPACE)
         })
 
-        let points = parsePoints(this.info.outline[0][0])
-        if (points.length > 0) {
-            let shape = new Shape(points)
-            let extrudeSettings = {
-                depth: object.children.map(a => a.height).reduce((a, b) => a + b) * 4,
-                bevelEnabled: false,
-            }
-            let geometry = new ExtrudeGeometry(shape, extrudeSettings)
-            let mesh = new Mesh(geometry)
-            mesh.onThemeChange = theme => {
-                mesh.material = new MeshBasicMaterial(theme.building)
-                mesh.material.depthTest = false
-            }
-            mesh.material.depthTest = false
-            object.outline = mesh
-            // object.add(mesh)
-        }
+        this.showAllFloors()
 
         object.rotateOnAxis(new Vector3(1, 0, 0), -Math.PI / 2)
     }
 
     updateBound(map) {
-        this.floors.forEach(floor => {
-            if (this.showAll || floor.name === this.currentFloorNum) {
+        this.floors
+            .filter(it => it.visible)
+            .forEach(floor => {
                 for (let i in floor.sprites) {
                     const sprite1 = floor.sprites[i]
                     sprite1.updateBound(map)
@@ -90,37 +72,38 @@ class Building extends Group {
                         }
                     }
                 }
-            }
-        })
+            })
     }
 
     showFloor(floorNum) {
         if (floorNum > this.groundFloor || floorNum < -this.underFloor || floorNum === 0) {
             throw new Error('Invalid floor number.')
         }
+        let current = this.getFloor(this.currentFloorNum)
+        let target = this.getFloor(floorNum)
+        if (current == target) {
+            return
+        }
         this.currentFloorNum = floorNum
-        this.showAll = false
-        this.visible = true
-        // this.object3D.outline && (this.object3D.outline.visible = false)
-        this.children
-            .filter(obj => obj.isFloor)
-            .forEach(obj => {
-                obj.visible = obj === this.getFloor(floorNum) || obj.name === floorNum
-                obj.position.set(0, 0, 0)
-            })
-        this.scale.set(1, 1, 1)
+
+        if (!this._shouldShowAll_()) {
+            if (current) current.visible = false
+            target.visible = true
+        }
+
+        let index = this.children.filter(obj => obj.isFloor).findIndex(it => it === target)
+        new TWEEN.Tween(this.position)
+            .to({ y: -index * FLOOR_SPACE }, current != null ? 150 : 0)
+            .onComplete(() => this.updateBound(this.$map))
+            .start()
     }
 
-    showAllFloors(showAll = true) {
-        this.showAll = showAll
-        this.visible = true
-        this.children.forEach((obj, index) => {
-            obj.visible = true
+    showAllFloors(showAll = this._shouldShowAll_()) {
+        this.children.forEach(obj => {
             if (obj.isFloor) {
-                obj.position.set(0, 0, index * 1000)
+                obj.visible = showAll || obj === this.getFloor(this.currentFloorNum)
             }
         })
-        this.scale.set(1, 1, 1)
     }
 
     getCurrentFloor() {
@@ -130,8 +113,20 @@ class Building extends Group {
     getFloor(floorNum) {
         return this.floors.find(f => f.name == floorNum)
     }
+
+    _shouldShowAll_() {
+        return !this.$map || (this.$map.viewMode === ViewMode.MODE_3D && this.$map.showAllFloors)
+    }
 }
 
 mixinMapObject(Building, 'Building')
+
+Object.defineProperties(Building.prototype, {
+    floorNames: {
+        get: function() {
+            return this.floors ? this.floors.map(it => it.name) : []
+        },
+    },
+})
 
 export default Building

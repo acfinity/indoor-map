@@ -1,3 +1,58 @@
+function overlayMixin(XMap) {
+    Object.assign(XMap.prototype, {
+        addOverlay(overlay) {
+            this._overlays.add(overlay);
+            this._addOverlay(overlay);
+        },
+
+        removeOverlay(...overlays) {
+            this._removeOverlays(overlays);
+        },
+
+        clearOverlays() {
+            this._removeOverlays(this._overlays);
+        },
+
+        _addOverlay(overlay) {
+            if (this.building) {
+                if (overlay.isHTMLOverlay) {
+                    this.$overlayWrapper.appendChild(overlay.$el);
+                    overlay.render(this.locationToViewport(overlay.location));
+                } else {
+                    let floorObj = this.building.getFloor(overlay.floor);
+                    if (floorObj) {
+                        floorObj.add(overlay.object3D);
+                        if (overlay.object3D.isSprite) {
+                            overlay.object3D.scale.set(
+                                overlay.object3D.width / this._canvasScale,
+                                overlay.object3D.height / this._canvasScale,
+                                1
+                            );
+                        }
+                    } else {
+                        throw new Error('invalid floor')
+                    }
+                }
+            }
+        },
+
+        _removeOverlays(overlays) {
+            overlays.forEach(overlay => {
+                overlay.removeFromParent();
+                this._overlays.delete(overlay);
+            });
+        },
+    });
+}
+
+const addEvent = (el, type, fn, capture) => {
+    el.addEventListener(type, fn, capture);
+};
+
+const removeEvent = (el, type, fn, capture) => {
+    el.removeEventListener(type, fn, capture);
+};
+
 // Polyfills
 
 if ( Number.EPSILON === undefined ) {
@@ -46805,324 +46860,6 @@ ImageUtils.loadCompressedTextureCube = function () {
 
 };
 
-function eventMixin(Class) {
-    Object.assign(Class.prototype, EventDispatcher.prototype);
-    const eventMap = new Map();
-    Object.assign(Class.prototype, {
-        on(eventType, fn) {
-            let thisMap = eventMap.get(this);
-            if (!thisMap) {
-                thisMap = new Map();
-                eventMap.set(this, thisMap);
-            }
-            let listener = event => fn(event.message);
-            thisMap.set(fn, listener);
-            this.addEventListener(eventType, listener);
-        },
-        off(eventType, fn) {
-            let thisMap = eventMap.get(this);
-            if (thisMap) {
-                let listener = thisMap.get(fn);
-                if (listener) {
-                    thisMap.delete(fn);
-                    this.removeEventListener(eventType, listener);
-                }
-            }
-        },
-    });
-}
-
-const initEvent = (function() {
-    const raycaster = new Raycaster();
-    const mouse = new Vector2();
-    const vector = new Vector3(mouse.x, mouse.y, 0.5);
-    // let preHoveredEntity = undefined
-    const intersectObjects = function(eventType, mo, e) {
-        if (!mo.building) {
-            return
-        }
-        let point = e.touches ? e.touches[0] : e;
-        vector.set(
-            (point.pageX / mo.$wrapper.clientWidth) * 2 - 1,
-            -(point.pageY / mo.$wrapper.clientHeight) * 2 + 1,
-            0.5
-        );
-        raycaster.setFromCamera(vector, mo._camera);
-        return raycaster.intersectObjects(
-            [...mo._overlays]
-                .filter(it => it.hasEventListener(eventType))
-                .map(it => it.object3D)
-                .concat(mo.building.floors)
-                .filter(it => it.visible),
-            true
-        )
-    };
-    return function(mo) {
-        mo.control.onClickListener = e => {
-            let intersects = intersectObjects('click', mo, e);
-            if (!intersects || intersects.length === 0) {
-                return
-            }
-            let overlay;
-            if (intersects[0].object.handler && intersects[0].object.handler.isOverlay) {
-                overlay = intersects[0].object.handler;
-                intersects[0].object.handler.dispatchEvent({ type: 'click', message: { overlay, domEvent: e } });
-            }
-            intersects
-                .filter(it => it.object.isRoom)
-                .splice(0, 1)
-                .forEach(it => it.object.dispatchEvent({ type: 'click' }));
-            if (mo.hasEventListener('click')) {
-                let floor = intersects.filter(it => it.object.isFloor)[0];
-                if (floor) {
-                    mo.dispatchEvent({
-                        type: 'click',
-                        message: {
-                            x: Math.round(floor.point.x),
-                            y: -Math.round(floor.point.z),
-                            floor: floor.object.handler.name,
-                            overlay,
-                            domEvent: e,
-                        },
-                    });
-                }
-            }
-        };
-        mo.control.onHoverListener = e => {
-            let intersects = intersectObjects('hover', mo, e);
-            if (!intersects || intersects.length === 0) {
-                return
-            }
-            // let hoveredEntity = null
-            // if (intersects[0].object.handler && intersects[0].object.handler.isOverlay) {
-            //     intersects[0].object.handler.dispatchEvent('click', { domEvent: e })
-            //     // overlay = intersects[0].object.handler
-            // }
-            // if (hoveredEntity && hoveredEntity.object === preHoveredEntity) {
-            //     return
-            // } else {
-            //     if (this._hoveredEntity != null) {
-            //         this._hoveredEntity.handler.onHover && preHoveredEntity.handler.onHover(false)
-            //     }
-            //     if (hoveredEntity != null) {
-            //         this._hoveredEntity = hoveredEntity.object
-            //         this._hoveredEntity.handler.onHover && preHoveredEntity.handler.onHover(true)
-            //     } else {
-            //         this._hoveredEntity = null
-            //     }
-            // }
-        };
-    }
-})();
-
-class Overlay {
-    constructor() {}
-
-    show() {
-        this.visible = true;
-    }
-
-    hide() {
-        this.visible = false;
-    }
-
-    removeFromParent() {
-        if (this.object3D && this.object3D.parent) {
-            this.object3D.parent.remove(this.object3D);
-        }
-    }
-
-    setLocation(location /*, animate*/) {
-        this.currentLocation = location;
-        this.object3D.position.copy(location.localPosition);
-    }
-}
-
-eventMixin(Overlay);
-
-Object.defineProperties(Overlay.prototype, {
-    visible: {
-        enumerable: true,
-        configurable: false,
-        get: function() {
-            return this.object3D && this.object3D.visible
-        },
-        set: function(value) {
-            this.object3D && (this.object3D.visible = value);
-        },
-    },
-
-    isOverlay: {
-        value: true,
-        writable: false,
-    },
-});
-
-class HTMLOverlay extends Overlay {
-    constructor(location, options) {
-        super();
-
-        this.location = location;
-        this.options = options;
-        
-        if (typeof this.initialize !== 'function' || typeof this.render !== 'function') {
-            throw new Error('initialize && render must be implements')
-        }
-        this.$el = this.initialize();
-    }
-}
-
-Object.defineProperties(HTMLOverlay.prototype, {
-    isHTMLOverlay: {
-        value: true,
-        writable: false,
-    },
-});
-
-const PUB_POINT_SIZE = new Vector2(20, 20);
-
-class Marker extends Overlay {
-    constructor(location, options = {}) {
-        super();
-
-        this.options = options;
-        this.currentLocation = location;
-        this.location = location;
-        this.floor = location.floor;
-        this.position = location.localPosition;
-
-        this.makeObject3D();
-    }
-
-    makeObject3D() {
-        let { icon } = this.options;
-
-        this.texture = new TextureLoader().load(icon, t => {
-            t.needsUpdate = true;
-        });
-        this.texture.minFilter = LinearFilter;
-        this.material = new SpriteMaterial({
-            map: this.texture,
-            sizeAttenuation: false,
-            transparent: true,
-            alphaTest: 0.1,
-            depthTest: false,
-        });
-
-        let sprite = new Sprite(this.material);
-        let size = PUB_POINT_SIZE;
-        if (typeof this.options.size === 'number' || typeof this.options.size === 'string') {
-            size = Number(this.options.size);
-            size = new Vector2(size, size);
-        } else if (this.options.size && this.options.size.width > 0) {
-            size = this.options.size;
-        }
-        let align = this.options.align || 'CENTER';
-        sprite.width = size.width;
-        sprite.height = size.height;
-        sprite.scale.set(size.width / this.canvasScale, size.width / this.canvasScale, 1);
-        sprite.position.copy(this.position);
-        sprite.handler = this;
-        sprite.type = 'Marker';
-        if (align === 'CENTER') {
-            sprite.center.set(0.5, 0.5);
-        } else if (align === 'BOTTOM') {
-            sprite.center.set(0.5, 0);
-        }
-        sprite.renderOrder = 10;
-        sprite.onViewModeChange = is3dMode => sprite.position.setZ(is3dMode ? this.currentLocation.z : 3);
-        this.object3D = sprite;
-        return sprite
-    }
-}
-
-class HTMLInfoWindow extends HTMLOverlay {
-    initialize() {
-        let span = document.createElement('span');
-        span.style.border = 'solid 1px red';
-        span.style.background = 'white';
-        span.style.position = 'absolute';
-        span.style.padding = '3px 4px';
-        span.style.width = '130px';
-        span.style.fontSize = '14px';
-        span.appendChild(document.createTextNode(this.options.content));
-        return span
-    }
-
-    render(position) {
-        this.$el.style.left = position.x + 'px';
-        this.$el.style.top = position.y - this.$el.clientHeight + 'px';
-        this.$el.style.zIndex = position.zIndex;
-    }
-}
-
-var Overlays = {
-    Overlay,
-    HTMLOverlay,
-    Marker,
-    HTMLInfoWindow,
-};
-
-function overlayMixin(XMap) {
-    Object.assign(XMap.prototype, {
-        addOverlay(overlay) {
-            this._overlays.add(overlay);
-            this._addOverlay(overlay);
-        },
-
-        removeOverlay(...overlays) {
-            this._removeOverlays(overlays);
-        },
-
-        clearOverlays() {
-            this._removeOverlays(this._overlays);
-        },
-
-        _addOverlay(overlay) {
-            if (this.building) {
-                if (overlay.isHTMLOverlay) {
-                    this.$overlayWrapper.appendChild(overlay.$el);
-                    overlay.render(this.locationToViewport(overlay.location));
-                } else {
-                    let floorObj = this.building.getFloor(overlay.floor);
-                    if (floorObj) {
-                        floorObj.add(overlay.object3D);
-                    } else {
-                        throw new Error('invalid floor')
-                    }
-                }
-            }
-        },
-
-        _removeOverlays(overlays) {
-            overlays.forEach(overlay => {
-                overlay.removeFromParent();
-                this._overlays.delete(overlay);
-            });
-        },
-    });
-}
-
-const overlayMixins = map => {
-    Object.defineProperties(Overlay.prototype, {
-        canvasScale: {
-            enumerable: false,
-            configurable: false,
-            get: function reactiveGetter() {
-                return map._canvasScale
-            },
-        },
-    });
-};
-
-const addEvent = (el, type, fn, capture) => {
-    el.addEventListener(type, fn, capture);
-};
-
-const removeEvent = (el, type, fn, capture) => {
-    el.removeEventListener(type, fn, capture);
-};
-
 const STATE = {
     NONE: -1,
     ROTATE: 0,
@@ -47134,22 +46871,16 @@ const STATE = {
 };
 const userRotateSpeed = 2.0;
 const autoRotateSpeed = 1.0;
-const autoRotationAngle = ((2 * Math.PI) / 60 / 60) * autoRotateSpeed;
-const EPS = 1e-7;
+const autoRotationAngle = (360 / 60 / 60) * autoRotateSpeed;
 const PIXELS_PER_ROUND = 1800;
 const SCALE_STEP = 1.05;
 const TOUCH_SCALE_STEP = 1.03;
 
-class OrbitControl {
-    constructor(camera, wrapper) {
-        this.camera = camera;
-        this.wrapper = wrapper;
-
-        this.minPolarAngle = 0; // radians
-        this.maxPolarAngle = Math.PI / 2; // radians
-
-        this.minDistance = 0;
-        this.maxDistance = Infinity;
+class GestureControl {
+    constructor(map) {
+        this.$map = map;
+        this.camera = map._camera;
+        this.wrapper = map.$mapWrapper;
 
         this.enabled = true;
         this.scrollWheelZoomEnabled = true;
@@ -47174,112 +46905,24 @@ class OrbitControl {
 
     pan(start, end) {
         let vector = this.viewToWorld(start).sub(this.viewToWorld(end));
-        // let worldEnd = this.viewToWorld(end)
-        // let offset = vector.length()
-        // if(offset>)
-        // console.log(offset)
-        this.camera.position.add(vector);
-        this.center.add(vector);
 
-        this.viewChanged = true;
+        this.$map._translate_(vector);
     }
 
     rotateLeft(angle = autoRotationAngle) {
-        this.thetaDelta -= angle;
+        this.$map.rotateTo({ angle: this.$map.rotateAngle - angle, animate: false });
     }
 
     rotateRight(angle = autoRotationAngle) {
-        this.thetaDelta += angle;
+        this.$map.rotateTo({ angle: this.$map.rotateAngle + angle, animate: false });
     }
 
     rotateUp(angle = autoRotationAngle) {
-        this.phiDelta -= angle;
+        this.$map.tiltTo({ angle: this.$map.tiltAngle - angle, animate: false });
     }
 
     rotateDown(angle = autoRotationAngle) {
-        this.phiDelta += angle;
-    }
-
-    zoomIn(scale = 1.25) {
-        this.scale *= scale;
-        this.currentScale *= scale;
-    }
-
-    zoomOut(scale = 0.8) {
-        this.scale *= scale;
-        this.currentScale *= scale;
-    }
-
-    changeViewMode(is3dMode) {
-        if (this.is3dMode === is3dMode) {
-            return
-        }
-        let count = 10;
-        this.is3dMode = is3dMode;
-        if (is3dMode) {
-            let temp = setInterval(() => {
-                this.phiDelta = this.phi / 10;
-                count--;
-                if (!count) {
-                    clearInterval(temp);
-                }
-            }, 1000 / 60);
-        } else {
-            let temp = setInterval(() => {
-                this.phiDelta = -this.phi / 10;
-                count--;
-                if (!count) {
-                    clearInterval(temp);
-                }
-            }, 1000 / 60);
-        }
-    }
-
-    update() {
-        let position = this.camera.position;
-        let offset = position.clone().sub(this.center);
-
-        // angle from z-axis around y-axis
-        let theta = Math.atan2(offset.x, offset.z);
-        // angle from y-axis
-
-        let phi = Math.atan2(Math.sqrt(offset.x * offset.x + offset.z * offset.z), offset.y);
-
-        if (this.autoRotate) {
-            this.rotateLeft(autoRotationAngle);
-        }
-
-        theta += this.thetaDelta;
-        phi += this.phiDelta;
-
-        // restrict phi to be between desired limits
-        phi = Math.max(this.minPolarAngle, Math.min(this.maxPolarAngle, phi));
-
-        // restrict phi to be betwee EPS and PI-EPS
-        phi = this.phi = Math.max(EPS, Math.min(Math.PI * 0.37 - EPS, phi));
-        if (this.is3dMode) {
-            this.phi = phi;
-        }
-
-        let radius = offset.length() / this.scale;
-
-        // restrict radius to be between desired limits
-        radius = Math.max(this.minDistance, Math.min(this.maxDistance, radius));
-
-        offset.x = radius * Math.sin(phi) * Math.sin(theta);
-        offset.y = radius * Math.cos(phi);
-        offset.z = radius * Math.sin(phi) * Math.cos(theta);
-
-        position.copy(this.center).add(offset);
-        this.camera.lookAt(this.center);
-        this.thetaDelta = 0;
-        this.phiDelta = 0;
-        this.scale = 1;
-
-        if (this.lastPosition.distanceTo(this.camera.position) > 0) {
-            this.lastPosition.copy(this.camera.position);
-            this.viewChanged = true;
-        }
+        this.$map.tiltTo({ angle: this.$map.tiltAngle + angle, animate: false });
     }
 
     _initVars() {
@@ -47321,7 +46964,7 @@ class OrbitControl {
             passive: false,
         });
         eventType(window, 'mousemove', this);
-        eventType(this.wrapper, 'mousewheel', this);
+        eventType(this.wrapper.parentElement, 'mousewheel', this);
         eventType(window, 'contextmenu', this, false);
     }
 
@@ -47363,8 +47006,6 @@ class OrbitControl {
     _start(e) {
         if (!this.enabled) return
 
-        // e.preventDefault()
-
         if (this.state === STATE.NONE) {
             if (e.button === 0 || (e.touches && e.touches.length == 1)) {
                 this.state = STATE.CLICK;
@@ -47392,14 +47033,13 @@ class OrbitControl {
                 return
             }
             if (this.state === STATE.ROTATE) {
-                this.rotateLeft(((2 * Math.PI * this.deltaVector.x) / PIXELS_PER_ROUND) * userRotateSpeed);
-                this.is3dMode &&
-                    this.rotateUp(((2 * Math.PI * this.deltaVector.y) / PIXELS_PER_ROUND) * userRotateSpeed);
+                this.rotateLeft(((360 * this.deltaVector.x) / PIXELS_PER_ROUND) * userRotateSpeed);
+                this.rotateUp(((360 * this.deltaVector.y) / PIXELS_PER_ROUND) * userRotateSpeed);
             } else if (this.state === STATE.ZOOM) {
                 if (this.deltaVector.y > 0) {
-                    this.zoomIn();
+                    this.$map.zoomIn();
                 } else {
-                    this.zoomOut();
+                    this.$map.zoomOut();
                 }
             } else if (this.state === STATE.CLICK || this.state === STATE.PAN) {
                 this.state = STATE.PAN;
@@ -47427,8 +47067,7 @@ class OrbitControl {
 
         let delta = e.wheelDelta ? e.wheelDelta / 120 : -e.detail / 3;
         let scale = Math.pow(SCALE_STEP, delta);
-        this.scale *= scale;
-        this.currentScale *= scale;
+        this.$map._scale_(scale);
     }
 
     _touchStart(e) {
@@ -47457,9 +47096,9 @@ class OrbitControl {
             if (Math.abs(dStart - dEnd) < 5) {
                 return
             } else if (dStart < dEnd) {
-                this.zoomIn(TOUCH_SCALE_STEP);
+                this.$map.zoomIn(TOUCH_SCALE_STEP);
             } else {
-                this.zoomOut(1 / TOUCH_SCALE_STEP);
+                this.$map.zoomOut(1 / TOUCH_SCALE_STEP);
             }
             // } else if (this.state === STATE.ROTATE) {
         }
@@ -47467,8 +47106,8 @@ class OrbitControl {
     }
 }
 
-Object.assign(OrbitControl.prototype, Object.create(EventDispatcher.prototype));
-Object.assign(OrbitControl.prototype, {
+Object.assign(GestureControl.prototype, Object.create(EventDispatcher.prototype));
+Object.assign(GestureControl.prototype, {
     viewToWorld: (function() {
         const raycaster = new Raycaster();
         const vector = new Vector3(0, 0, 0.5);
@@ -47486,54 +47125,16 @@ Object.assign(OrbitControl.prototype, {
 });
 
 class BaseControl {
-    constructor() {
-    }
-}
-
-class FloorControl extends BaseControl {
-    constructor(mo) {
-        super();
-
-        this.map = mo;
-        this.camera = mo._camera;
-        this.$el = document.createElement('ul');
-        this.$el.classList = ['imap-floor-control'];
-        this.$el.style.display = 'none';
-
-        mo.$controlWrapper.appendChild(this.$el);
-    }
-
-    show(building) {
-        this.building = building;
-
-        const floors = new Map(building.floors.map(f => [f.info.name, f]));
-        if (floors.size < 2) {
-            this.$el.style.display = 'none';
-            return
+    constructor(mm) {
+        if (typeof mm !== 'object' || !mm.isMap) {
+            throw new Error('params error')
         }
-        while (this.$el.lastChild) this.$el.removeChild(this.$el.lastChild);
-
-        building.floors
-            .map(f => f.name)
-            .concat('All')
-            .reverse()
-            .forEach(it => {
-                let li = document.createElement('li');
-                li.appendChild(document.createTextNode(it));
-                li.addEventListener('click', () => this.showFloor(floors.get(li.innerHTML)));
-                this.$el.appendChild(li);
-            });
-        this.$el.style.display = 'block';
+        this.$map = mm;
     }
 
-    showFloor(floor) {
-        if (floor) {
-            this.building.showFloor(floor.name);
-        } else {
-            this.building.showAllFloors();
-        }
-        this.building.updateBound(this.map);
-    }
+    onAdd() {}
+
+    onRemove() {}
 }
 
 const ViewMode = {
@@ -47550,40 +47151,142 @@ var Constants = /*#__PURE__*/Object.freeze({
 	Scale: Scale
 });
 
-const PERSPECTIVE_FOV = 20;
+class FloorControl extends BaseControl {
+    constructor(mm) {
+        super(mm);
 
-function changeViewMode(mo, is3dMode) {
-    mo.control.changeViewMode(is3dMode);
-    function changeMode(object) {
-        if (object.onViewModeChange) object.onViewModeChange(is3dMode);
-        if (object.children && object.children.length > 0) {
-            object.children.forEach(obj => changeMode(obj));
+        this.$elAll = null;
+        this.$elFloor = null;
+
+        this._init_();
+    }
+
+    _init_() {
+        let mm = this.$map;
+        this.camera = mm._camera;
+        this.$el = document.createElement('ul');
+        this.$el.classList = ['xmap-floor-control'];
+        this.$el.style.display = 'none';
+        mm.$controlWrapper.appendChild(this.$el);
+        mm.on(
+            'mapLoaded',
+            (this._mapLoaded_ = () => {
+                this._show_(mm.building);
+            })
+        );
+        mm.on(
+            'stateChanged',
+            (this._stateChanged_ = () => {
+                this._refresh_();
+            })
+        );
+        mm.on(
+            'floorChanged',
+            (this._floorChanged_ = floor => {
+                this.setFloor(floor);
+            })
+        );
+        if (mm.building) {
+            this._show_(mm.building);
         }
     }
-    changeMode(mo.building);
+
+    destory() {
+        if (this.$map) {
+            this.$map.off('mapLoaded', this._mapLoaded_);
+            this.$map.off('stateChanged', this._stateChanged_);
+            this.$map.off('floorChanged', this._floorChanged_);
+            this.$map.$controlWrapper.appendChild(this.$el);
+        }
+    }
+
+    _refresh_() {
+        if (!this.$map || !this.$map.building) {
+            this.$el.style.display = 'none';
+        } else if (this.$elAll) {
+            if (this.$map.viewMode === ViewMode.MODE_2D) {
+                this.$elAll.style.display = 'none';
+            } else {
+                this.$elAll.style.display = 'block';
+                if (this.$map.showAllFloors) {
+                    this.$elAll.classList.add('active');
+                } else {
+                    this.$elAll.classList.remove('active');
+                }
+            }
+        }
+    }
+
+    _show_(building) {
+        this.building = building;
+        const floors = new Map(building.floors.map(f => [f.info.name, f]));
+        if (floors.size < 2) {
+            this.$el.style.display = 'none';
+            this.$elAll = null;
+            this.$elFloor = null;
+            return
+        }
+        while (this.$el.lastChild) this.$el.removeChild(this.$el.lastChild);
+
+        building.floors
+            .map(f => f.name)
+            .concat('All')
+            .reverse()
+            .forEach(it => {
+                let li = document.createElement('li');
+                li.appendChild(document.createTextNode(it));
+                li.addEventListener('click', () => this.showFloor(li));
+                this.$el.appendChild(li);
+            });
+        let [elAll, ...elFloor] = Array.from(this.$el.children);
+        this.$elAll = elAll;
+        this.$elFloor = elFloor;
+        this.$el.style.display = 'block';
+
+        this.$elAll.classList.add('btn-all');
+        this._refresh_();
+        this.setFloor(this.$map.currentFloor);
+    }
+
+    showFloor(li) {
+        let floor = li.childNodes.item(0).data;
+        if (this.$elAll != li) {
+            this.$elFloor.forEach(el => {
+                if (el === li) {
+                    el.classList.add('active');
+                } else {
+                    el.classList.remove('active');
+                }
+            });
+            this.$map.setFloor(floor);
+        } else {
+            this.$elAll.classList.toggle('active');
+            this.$map.setShowAllFloors(this.$elAll.classList.contains('active'));
+        }
+    }
+
+    setFloor(floor) {
+        if (this.$elFloor) {
+            let active = false;
+            this.$elFloor.forEach(el => {
+                let floorNum = el.childNodes.item(0).data;
+                if (floor == floorNum) {
+                    el.classList.add('active');
+                    active = true;
+                } else {
+                    el.classList.remove('active');
+                }
+            });
+            if (!active) this.$elFloor[this.$elFloor.length - 1].classList.add('active');
+        }
+    }
 }
+
+const PERSPECTIVE_FOV = 20;
 
 function viewMixin(XMap) {
     Object.assign(XMap.prototype, {
         setDefaultView() {
-            let camAngle = Math.PI / 2;
-            let camDir = [Math.cos(camAngle), Math.sin(camAngle)];
-            let camLen = 5000;
-            let tiltAngle = (75.0 * Math.PI) / 180.0;
-            this._camera.position.set(-camDir[1] * camLen, Math.sin(tiltAngle) * camLen, camDir[0] * camLen);
-            this._camera.lookAt(this._scene.position);
-
-            this.control.reset();
-            this.control.viewChanged = true;
-            return this
-        },
-
-        setViewMode(mode) {
-            if ((mode !== ViewMode.MODE_2D && mode !== ViewMode.MODE_3D) || mode === this._currentViewMode) {
-                return
-            }
-            this._currentViewMode = mode;
-            changeViewMode(this, mode === ViewMode.MODE_3D);
         },
 
         locationToViewport: (function() {
@@ -47591,14 +47294,15 @@ function viewMixin(XMap) {
             const screenPosition = new Vector4();
             return function parseLocation(location) {
                 worldPosition.copy(location);
-                let floor = this.building.getFloor(location.floor);
+                let floor = this.building && this.building.getFloor(location.floor);
                 if (!floor) {
                     throw new Error('invalid floor')
                 }
-                if (!floor.visible) {
+                if (!floor || !floor.visible) {
                     return {
                         x: -Infinity,
                         y: -Infinity,
+                        distance: Infinity,
                     }
                 } else {
                     floor.localToWorld(worldPosition);
@@ -47633,11 +47337,11 @@ function initDom(mo) {
     mo.$wrapper.appendChild(mo.$mapWrapper);
 
     mo.$overlayWrapper = document.createElement('div');
-    mo.$overlayWrapper.className = 'imap-overlays';
+    mo.$overlayWrapper.className = 'xmap-overlays';
     mo.$wrapper.appendChild(mo.$overlayWrapper);
 
     mo.$controlWrapper = document.createElement('div');
-    mo.$controlWrapper.className = 'imap-controls';
+    mo.$controlWrapper.className = 'xmap-controls';
     mo.$wrapper.appendChild(mo.$controlWrapper);
 }
 
@@ -47664,6 +47368,7 @@ function initThree(mo) {
 
     mo.renderer = new WebGLRenderer({
         antialias: true,
+        alpha: true
     });
     mo.renderer.autoClear = false;
     mo.renderer.setClearColor('#ffffff');
@@ -47700,6 +47405,125 @@ function initView(mo) {
     }
     addEvent(window, 'resize', () => refreshSize());
 }
+
+function eventMixin(Class) {
+    Object.assign(Class.prototype, EventDispatcher.prototype);
+    const eventMap = new Map();
+    const bindEvent = (mo, eventType, fn, once) => {
+        let thisMap = eventMap.get(mo);
+        if (!thisMap) {
+            thisMap = new Map();
+            eventMap.set(mo, thisMap);
+        }
+        let listener = event => {
+            once && mo.off(eventType, fn);
+            fn(event.message);
+        };
+        thisMap.set(fn, listener);
+        mo.addEventListener(eventType, listener);
+    };
+    Object.assign(Class.prototype, {
+        on(eventType, fn) {
+            bindEvent(this, eventType, fn);
+        },
+        once(eventType, fn) {
+            bindEvent(this, eventType, fn, true);
+        },
+        off(eventType, fn) {
+            let thisMap = eventMap.get(this);
+            if (thisMap) {
+                let listener = thisMap.get(fn);
+                if (listener) {
+                    thisMap.delete(fn);
+                    this.removeEventListener(eventType, listener);
+                }
+            }
+        },
+    });
+}
+
+const initEvent = (function() {
+    const raycaster = new Raycaster();
+    const mouse = new Vector2();
+    const vector = new Vector3(mouse.x, mouse.y, 0.5);
+    // let preHoveredEntity = undefined
+    const intersectObjects = function(eventType, mo, e) {
+        if (!mo.building) {
+            return
+        }
+        let point = e.touches ? e.touches[0] : e;
+        vector.set(
+            (point.pageX / mo.$wrapper.clientWidth) * 2 - 1,
+            -(point.pageY / mo.$wrapper.clientHeight) * 2 + 1,
+            0.5
+        );
+        raycaster.setFromCamera(vector, mo._camera);
+        return raycaster.intersectObjects(
+            [...mo._overlays]
+                .filter(it => it.hasEventListener(eventType))
+                .map(it => it.object3D)
+                .concat(mo.building.floors)
+                .filter(it => it.visible),
+            true
+        )
+    };
+    return function(mo) {
+        mo.gestureControl.onClickListener = e => {
+            let intersects = intersectObjects('click', mo, e);
+            if (!intersects || intersects.length === 0) {
+                return
+            }
+            let overlay;
+            if (intersects[0].object.handler && intersects[0].object.handler.isOverlay) {
+                overlay = intersects[0].object.handler;
+                intersects[0].object.handler.dispatchEvent({ type: 'click', message: { overlay, domEvent: e } });
+            }
+            intersects
+                .filter(it => it.object.isRoom)
+                .splice(0, 1)
+                .forEach(it => it.object.dispatchEvent({ type: 'click' }));
+            if (mo.hasEventListener('click')) {
+                let floor = intersects.filter(it => it.object.isFloor)[0];
+                if (floor) {
+                    mo.dispatchEvent({
+                        type: 'click',
+                        message: {
+                            x: Math.round(floor.point.x),
+                            y: -Math.round(floor.point.z),
+                            floor: floor.object.handler.name,
+                            overlay,
+                            domEvent: e,
+                        },
+                    });
+                }
+            }
+        };
+        mo.gestureControl.onHoverListener = e => {
+            let intersects = intersectObjects('hover', mo, e);
+            if (!intersects || intersects.length === 0) {
+                return
+            }
+            // let hoveredEntity = null
+            // if (intersects[0].object.handler && intersects[0].object.handler.isOverlay) {
+            //     intersects[0].object.handler.dispatchEvent('click', { domEvent: e })
+            //     // overlay = intersects[0].object.handler
+            // }
+            // if (hoveredEntity && hoveredEntity.object === preHoveredEntity) {
+            //     return
+            // } else {
+            //     if (this._hoveredEntity != null) {
+            //         this._hoveredEntity.handler.onHover && preHoveredEntity.handler.onHover(false)
+            //     }
+            //     if (hoveredEntity != null) {
+            //         this._hoveredEntity = hoveredEntity.object
+            //         this._hoveredEntity.handler.onHover && preHoveredEntity.handler.onHover(true)
+            //     } else {
+            //         this._hoveredEntity = null
+            //     }
+            // }
+        };
+    }
+})();
 
 const mixinMapObject = function(Class, type) {
     eventMixin(Class);
@@ -47743,6 +47567,7 @@ const parsePoints = array => {
 };
 
 const __needsUpdate__ = new Map();
+const canvasScale = 2;
 
 class SpriteCanvasMaterial extends SpriteMaterial {
     constructor({ measure, compile }) {
@@ -47768,11 +47593,10 @@ class SpriteCanvasMaterial extends SpriteMaterial {
             canvas.width = 512;
             canvas.height = 512;
             let size = this.measure(canvas.getContext('2d'));
-            canvas.width = Math.ceil(size.width);
-            canvas.height = Math.ceil(size.height);
+            canvas.width = Math.ceil(size.width * canvasScale);
+            canvas.height = Math.ceil(size.height * canvasScale);
             let context = canvas.getContext('2d');
-            context.imageSmoothingEnabled = true;
-            this.compile(context);
+            this.compile(context, canvasScale);
             this.map.needsUpdate = true;
         }
     }
@@ -47782,26 +47606,25 @@ class SpriteCanvasMaterial extends SpriteMaterial {
     }
 
     get width() {
-        return this.map.image.width
+        return this.map.image.width / canvasScale
     }
 
     get height() {
-        return this.map.image.height
+        return this.map.image.height / canvasScale
     }
 }
 
-function getValue(value) {
-    return typeof value === 'function' ? value() : value
-}
-
 const defaultIconSize = new Vector2(15, 15);
-const __needsUpdate__$1 = new Map();
+const __needsUpdate__$1 = new WeakMap();
+const __options__ = new WeakMap();
 
 class Label extends Sprite {
-    constructor(text, options = {}) {
+    constructor(text, options) {
         super();
         this.text = text;
-        this.options = options;
+        __options__.set(this, {});
+        this.setOptions(options);
+        this.options = { ...options };
 
         this._initMaterial_();
 
@@ -47813,49 +47636,85 @@ class Label extends Sprite {
         this.text = text;
     }
 
+    setOptions({
+        color = 'rgba(0,0,0,1)',
+        face = 'sans-serif',
+        size = 15,
+        strokeColor = 'white',
+        strokeWidth = 3,
+    } = {}) {
+        __options__.get(this).fontColor = color;
+        __options__.get(this).fontFace = face;
+        __options__.get(this).fontSize = size;
+        __options__.get(this).strokeColor = strokeColor;
+        __options__.get(this).strokeWidth = strokeWidth;
+    }
+
+    setIcon({ icon, iconSize = defaultIconSize, iconPosition = 'left' } = {}) {
+        let beforeIcon = __options__.get(this).icon;
+        beforeIcon && beforeIcon.removeEventListener('load', this._iconLoaded_);
+        if (icon) {
+            icon.addEventListener(
+                'load',
+                (this._iconLoaded_ = () => {
+                    this._updateMaterial_();
+                })
+            );
+        }
+        __options__.get(this).icon = icon;
+        __options__.get(this).iconSize = iconSize;
+        __options__.get(this).iconPosition = iconPosition;
+    }
+
     _initMaterial_() {
-        let icon, iconPosition, iconSize;
-        let fontface = this.options.fontsize || 'sans-serif';
-        let fontsize = this.options.fontsize || 16;
-        let color = this.options.color || 'rgba(0,0,0,1)';
+        let options = __options__.get(this);
         this.material = new SpriteCanvasMaterial({
             measure: context => {
-                context.font = fontsize + 'px ' + fontface;
+                context.font = options.fontSize + 'px ' + options.fontFace;
                 let metrics = context.measureText(this.text);
                 let width = metrics.width || 1;
-                let height = fontsize * 1.2;
-                if (this.options.icon) {
-                    icon = getValue(this.options.icon);
-                    iconPosition = getValue(this.options.iconPosition) || 'left';
-                    iconSize = getValue(this.options.iconSize) || defaultIconSize;
-                    if (iconPosition == 'top') {
-                        height += iconSize.height;
+                let height = options.fontSize * 1.2;
+                if (options.icon && options.icon.image) {
+                    if (options.iconPosition == 'top') {
+                        height += options.iconSize.height;
                     } else {
-                        width += iconSize.width + 2;
+                        width += options.iconSize.width + 2;
                     }
-                } else {
-                    icon = null;
                 }
+                width += options.strokeWidth * 2;
+                height += options.strokeWidth * 2;
                 return { width, height }
             },
-            compile: context => {
-                let offsetX = 0,
-                    offsetY = 0;
-                if (icon) {
-                    if (iconPosition == 'top') {
-                        offsetY = iconSize.height;
-                        context.drawImage(icon, (this.width - iconSize.width) / 2, 0, iconSize.width, iconSize.height);
+            compile: (context, scale) => {
+                let offsetX = options.strokeWidth,
+                    offsetY = options.strokeWidth;
+                if (options.icon && options.icon.image) {
+                    if (options.iconPosition == 'top') {
+                        context.drawImage(
+                            options.icon.image,
+                            ((this.width - options.iconSize.width) / 2) * scale,
+                            offsetY * scale,
+                            options.iconSize.width * scale,
+                            options.iconSize.height * scale
+                        );
+                        offsetY += options.iconSize.height;
                     } else {
-                        offsetX = iconSize.width + 2;
-                        context.drawImage(icon, 0, (this.height - iconSize.height) / 2, iconSize.width, iconSize.height);
+                        context.drawImage(
+                            options.icon.image,
+                            offsetX * scale,
+                            ((this.height - options.iconSize.height) / 2) * scale,
+                            options.iconSize.width * scale,
+                            options.iconSize.height * scale
+                        );
+                        offsetX += options.iconSize.width + 2;
                     }
                 }
-                context.font = fontsize + 'px ' + fontface;
-                context.fillStyle = color;
-                context.strokeStyle = '#ffffff';
-                context.lineWidth = 2;
-                context.strokeText(this.text, offsetX, fontsize + offsetY);
-                context.fillText(this.text, offsetX, fontsize + offsetY);
+                context.font = options.fontSize * scale + 'px ' + options.fontFace;
+                context.fillStyle = options.fontColor;
+                context.strokeStyle = options.strokeColor;
+                context.lineWidth = options.strokeWidth * scale;
+                context.strokeText(this.text, offsetX * scale, (options.fontSize + offsetY) * scale);
+                context.fillText(this.text, offsetX * scale, (options.fontSize + offsetY) * scale);
             },
         });
     }
@@ -47977,10 +47836,8 @@ class Room extends Mesh {
         let geometry3d = new ExtrudeGeometry(shape, extrudeSettings);
         let geometry2d = new ShapeGeometry(shape);
         this.geometry = geometry3d;
-        this.onThemeChange = theme => {
-            let roomStyle = theme.roomStyle[this.info.category] || theme.roomStyle['default'];
-            this.material = new MeshLambertMaterial(roomStyle);
-        };
+        this.material = new MeshLambertMaterial();
+        this.material.alphaTest = 0.1;
         let object = this;
         object.onViewModeChange = is3dMode => {
             object.geometry = is3dMode ? geometry3d : geometry2d;
@@ -47990,28 +47847,18 @@ class Room extends Mesh {
         object.handler = this;
         object.box = new Box2().setFromPoints(points);
 
-        geometry = new Geometry().setFromPoints(points);
-        let wire = new LineLoop(geometry);
-        wire.position.set(0, 0, this.floor.info.height);
-        wire.onViewModeChange = is3dMode => wire.position.setZ(is3dMode ? this.floor.info.height : 2);
-        wire.onThemeChange = theme => (wire.material = new LineBasicMaterial(theme.strokeStyle));
-        object.add(wire);
-
         if (this.info.walls) {
             object.material.opacity = 0;
             geometry = new ShapeGeometry(shape);
-            let groundMaterial = new MeshStandardMaterial({
-                roughness: 0.8,
-                metalness: 0.5,
-            });
+            let groundMaterial = new MeshPhongMaterial();
             let textureLoader = new TextureLoader();
-            textureLoader.load('./textures/floor-board.jpg', function(map) {
-                map.wrapS = RepeatWrapping;
-                map.wrapT = RepeatWrapping;
-                map.anisotropy = 16;
-                map.repeat.set(0.005, 0.005);
-                map.minFilter = LinearFilter;
-                groundMaterial.map = map;
+            textureLoader.load('./textures/floor-board.jpg', function(texture) {
+                texture.minFilter = LinearFilter;
+                texture.wrapS = RepeatWrapping;
+                texture.wrapT = RepeatWrapping;
+                texture.anisotropy = 16;
+                texture.repeat.set(0.01, 0.01);
+                groundMaterial.map = texture;
                 groundMaterial.needsUpdate = true;
             });
             mesh = new Mesh(geometry, groundMaterial);
@@ -48024,6 +47871,7 @@ class Room extends Mesh {
                 flatShading: true,
                 opacity: 0.5,
                 transparent: true,
+                alphaTest: 0.1,
             });
             this.info.walls.forEach(wall => {
                 let points = parsePoints(wall);
@@ -48035,13 +47883,28 @@ class Room extends Mesh {
                     (points[0].y + points[1].y) / 2,
                     this.floor.info.height / 2
                 );
-                cube.rotation.z = points[0].sub(points[1]).angle() + Math.PI / 2;
+                cube.rotation.z = points[0].sub(points[1]).angle() + (Math.PI * 3) / 2;
                 cube.onViewModeChange = is3dMode => {
                     cube.geometry = is3dMode ? geometry3d : geometry2d;
                     cube.position.setZ(is3dMode ? this.floor.info.height / 2 : 2);
                 };
                 object.add(cube);
             });
+        } else {
+            geometry = new Geometry().setFromPoints(points);
+            let wire = new LineLoop(geometry);
+            wire.material = new LineBasicMaterial();
+            wire.material.alphaTest = 0.1;
+            wire.position.set(0, 0, this.floor.info.height);
+            wire.onViewModeChange = is3dMode => wire.position.setZ(is3dMode ? this.floor.info.height : 2);
+            object.add(wire);
+
+            this.onThemeChange = theme => {
+                let roomStyle = theme.roomStyle[this.info.category] || theme.roomStyle['default'];
+                this.material.setValues(roomStyle);
+                wire.material.setValues(roomStyle);
+                wire.material.color.multiplyScalar(0.5);
+            };
         }
         if (this.info.pillars) {
             let material = new MeshLambertMaterial({
@@ -48070,10 +47933,11 @@ class Room extends Mesh {
         let sprite = new Label(this.info.name);
         sprite.onThemeChange = theme => {
             let material = theme.materialMap.get(this.info.category + '');
-            if (!material || !material.map || !material.map.image) {
-                sprite.options.icon = undefined;
+            sprite.setOptions(theme.fontStyle);
+            if (!material || !material.map) {
+                sprite.setIcon();
             } else {
-                sprite.options.icon = material.map.image;
+                sprite.setIcon({ icon: material.map });
             }
             sprite.needsUpdate = true;
         };
@@ -48091,7 +47955,7 @@ class Room extends Mesh {
 
 mixinMapObject(Room, 'Room');
 
-const PUB_POINT_SIZE$1 = new Vector2(24, 24);
+const PUB_POINT_SIZE = new Vector2(24, 24);
 
 class PubPoint extends Sprite {
     constructor(attr, floor) {
@@ -48113,9 +47977,9 @@ class PubPoint extends Sprite {
                 sprite.material = theme.materialMap.get(this.info.type);
             }
         };
-        sprite.width = PUB_POINT_SIZE$1.width;
-        sprite.height = PUB_POINT_SIZE$1.height;
-        sprite.scale.set(PUB_POINT_SIZE$1.width / this.canvasScale, PUB_POINT_SIZE$1.height / this.canvasScale, 1);
+        sprite.width = PUB_POINT_SIZE.width;
+        sprite.height = PUB_POINT_SIZE.height;
+        sprite.scale.set(PUB_POINT_SIZE.width / this.canvasScale, PUB_POINT_SIZE.height / this.canvasScale, 1);
         this.scale.copy(sprite.scale);
         this.position.copy(this.center).setZ(this.floor.info.height + 5);
         sprite.handler = this;
@@ -48196,6 +48060,841 @@ class Floor extends Mesh {
 
 mixinMapObject(Floor, 'Floor');
 
+/**
+ * Tween.js - Licensed under the MIT license
+ * https://github.com/tweenjs/tween.js
+ * ----------------------------------------------
+ *
+ * See https://github.com/tweenjs/tween.js/graphs/contributors for the full list of contributors.
+ * Thank you all, you're awesome!
+ */
+
+var TWEEN = TWEEN || (function () {
+
+	var _tweens = [];
+
+	return {
+
+		getAll: function () {
+
+			return _tweens;
+
+		},
+
+		removeAll: function () {
+
+			_tweens = [];
+
+		},
+
+		add: function (tween) {
+
+			_tweens.push(tween);
+
+		},
+
+		remove: function (tween) {
+
+			var i = _tweens.indexOf(tween);
+
+			if (i !== -1) {
+				_tweens.splice(i, 1);
+			}
+
+		},
+
+		update: function (time, preserve) {
+
+			if (_tweens.length === 0) {
+				return false;
+			}
+
+			var i = 0;
+
+			time = time !== undefined ? time : TWEEN.now();
+
+			while (i < _tweens.length) {
+
+				if (_tweens[i].update(time) || preserve) {
+					i++;
+				} else {
+					_tweens.splice(i, 1);
+				}
+
+			}
+
+			return true;
+
+		}
+	};
+
+})();
+
+
+// Include a performance.now polyfill
+(function () {
+	// In a browser, use window.performance.now if it is available.
+	if (window !== undefined &&
+	         window.performance !== undefined &&
+		 window.performance.now !== undefined) {
+
+		// This must be bound, because directly assigning this function
+		// leads to an invocation exception in Chrome.
+		TWEEN.now = window.performance.now.bind(window.performance);
+	}
+	// Use Date.now if it is available.
+	else if (Date.now !== undefined) {
+		TWEEN.now = Date.now;
+	}
+	// Otherwise, use 'new Date().getTime()'.
+	else {
+		TWEEN.now = function () {
+			return new Date().getTime();
+		};
+	}
+})();
+
+
+TWEEN.Tween = function (object) {
+
+	var _object = object;
+	var _valuesStart = {};
+	var _valuesEnd = {};
+	var _valuesStartRepeat = {};
+	var _duration = 1000;
+	var _repeat = 0;
+	var _yoyo = false;
+	var _isPlaying = false;
+	var _delayTime = 0;
+	var _startTime = null;
+	var _easingFunction = TWEEN.Easing.Linear.None;
+	var _interpolationFunction = TWEEN.Interpolation.Linear;
+	var _chainedTweens = [];
+	var _onStartCallback = null;
+	var _onStartCallbackFired = false;
+	var _onUpdateCallback = null;
+	var _onCompleteCallback = null;
+	var _onStopCallback = null;
+
+	// Set all starting values present on the target object
+	for (var field in object) {
+		_valuesStart[field] = parseFloat(object[field], 10);
+	}
+
+	this.to = function (properties, duration) {
+
+		if (duration !== undefined) {
+			_duration = duration;
+		}
+
+		_valuesEnd = properties;
+
+		return this;
+
+	};
+
+	this.start = function (time) {
+
+		TWEEN.add(this);
+
+		_isPlaying = true;
+
+		_onStartCallbackFired = false;
+
+		_startTime = time !== undefined ? time : TWEEN.now();
+		_startTime += _delayTime;
+
+		for (var property in _valuesEnd) {
+
+			// Check if an Array was provided as property value
+			if (_valuesEnd[property] instanceof Array) {
+
+				if (_valuesEnd[property].length === 0) {
+					continue;
+				}
+
+				// Create a local copy of the Array with the start value at the front
+				_valuesEnd[property] = [_object[property]].concat(_valuesEnd[property]);
+
+			}
+
+			// If `to()` specifies a property that doesn't exist in the source object,
+			// we should not set that property in the object
+			if (_valuesStart[property] === undefined) {
+				continue;
+			}
+
+			_valuesStart[property] = _object[property];
+
+			if ((_valuesStart[property] instanceof Array) === false) {
+				_valuesStart[property] *= 1.0; // Ensures we're using numbers, not strings
+			}
+
+			_valuesStartRepeat[property] = _valuesStart[property] || 0;
+
+		}
+
+		return this;
+
+	};
+
+	this.stop = function () {
+
+		if (!_isPlaying) {
+			return this;
+		}
+
+		TWEEN.remove(this);
+		_isPlaying = false;
+
+		if (_onStopCallback !== null) {
+			_onStopCallback.call(_object);
+		}
+
+		this.stopChainedTweens();
+		return this;
+
+	};
+
+	this.stopChainedTweens = function () {
+
+		for (var i = 0, numChainedTweens = _chainedTweens.length; i < numChainedTweens; i++) {
+			_chainedTweens[i].stop();
+		}
+
+	};
+
+	this.delay = function (amount) {
+
+		_delayTime = amount;
+		return this;
+
+	};
+
+	this.repeat = function (times) {
+
+		_repeat = times;
+		return this;
+
+	};
+
+	this.yoyo = function (yoyo) {
+
+		_yoyo = yoyo;
+		return this;
+
+	};
+
+
+	this.easing = function (easing) {
+
+		_easingFunction = easing;
+		return this;
+
+	};
+
+	this.interpolation = function (interpolation) {
+
+		_interpolationFunction = interpolation;
+		return this;
+
+	};
+
+	this.chain = function () {
+
+		_chainedTweens = arguments;
+		return this;
+
+	};
+
+	this.onStart = function (callback) {
+
+		_onStartCallback = callback;
+		return this;
+
+	};
+
+	this.onUpdate = function (callback) {
+
+		_onUpdateCallback = callback;
+		return this;
+
+	};
+
+	this.onComplete = function (callback) {
+
+		_onCompleteCallback = callback;
+		return this;
+
+	};
+
+	this.onStop = function (callback) {
+
+		_onStopCallback = callback;
+		return this;
+
+	};
+
+	this.update = function (time) {
+
+		var property;
+		var elapsed;
+		var value;
+
+		if (time < _startTime) {
+			return true;
+		}
+
+		if (_onStartCallbackFired === false) {
+
+			if (_onStartCallback !== null) {
+				_onStartCallback.call(_object);
+			}
+
+			_onStartCallbackFired = true;
+
+		}
+
+		elapsed = (time - _startTime) / _duration;
+		elapsed = elapsed > 1 ? 1 : elapsed;
+
+		value = _easingFunction(elapsed);
+
+		for (property in _valuesEnd) {
+
+			// Don't update properties that do not exist in the source object
+			if (_valuesStart[property] === undefined) {
+				continue;
+			}
+
+			var start = _valuesStart[property] || 0;
+			var end = _valuesEnd[property];
+
+			if (end instanceof Array) {
+
+				_object[property] = _interpolationFunction(end, value);
+
+			} else {
+
+				// Parses relative end values with start as base (e.g.: +10, -3)
+				if (typeof (end) === 'string') {
+
+					if (end.charAt(0) === '+' || end.charAt(0) === '-') {
+						end = start + parseFloat(end, 10);
+					} else {
+						end = parseFloat(end, 10);
+					}
+				}
+
+				// Protect against non numeric properties.
+				if (typeof (end) === 'number') {
+					_object[property] = start + (end - start) * value;
+				}
+
+			}
+
+		}
+
+		if (_onUpdateCallback !== null) {
+			_onUpdateCallback.call(_object, value);
+		}
+
+		if (elapsed === 1) {
+
+			if (_repeat > 0) {
+
+				if (isFinite(_repeat)) {
+					_repeat--;
+				}
+
+				// Reassign starting values, restart by making startTime = now
+				for (property in _valuesStartRepeat) {
+
+					if (typeof (_valuesEnd[property]) === 'string') {
+						_valuesStartRepeat[property] = _valuesStartRepeat[property] + parseFloat(_valuesEnd[property], 10);
+					}
+
+					if (_yoyo) {
+						var tmp = _valuesStartRepeat[property];
+
+						_valuesStartRepeat[property] = _valuesEnd[property];
+						_valuesEnd[property] = tmp;
+					}
+
+					_valuesStart[property] = _valuesStartRepeat[property];
+
+				}
+
+				_startTime = time + _delayTime;
+
+				return true;
+
+			} else {
+
+				if (_onCompleteCallback !== null) {
+					_onCompleteCallback.call(_object);
+				}
+
+				for (var i = 0, numChainedTweens = _chainedTweens.length; i < numChainedTweens; i++) {
+					// Make the chained tweens start exactly at the time they should,
+					// even if the `update()` method was called way past the duration of the tween
+					_chainedTweens[i].start(_startTime + _duration);
+				}
+
+				return false;
+
+			}
+
+		}
+
+		return true;
+
+	};
+
+};
+
+
+TWEEN.Easing = {
+
+	Linear: {
+
+		None: function (k) {
+
+			return k;
+
+		}
+
+	},
+
+	Quadratic: {
+
+		In: function (k) {
+
+			return k * k;
+
+		},
+
+		Out: function (k) {
+
+			return k * (2 - k);
+
+		},
+
+		InOut: function (k) {
+
+			if ((k *= 2) < 1) {
+				return 0.5 * k * k;
+			}
+
+			return - 0.5 * (--k * (k - 2) - 1);
+
+		}
+
+	},
+
+	Cubic: {
+
+		In: function (k) {
+
+			return k * k * k;
+
+		},
+
+		Out: function (k) {
+
+			return --k * k * k + 1;
+
+		},
+
+		InOut: function (k) {
+
+			if ((k *= 2) < 1) {
+				return 0.5 * k * k * k;
+			}
+
+			return 0.5 * ((k -= 2) * k * k + 2);
+
+		}
+
+	},
+
+	Quartic: {
+
+		In: function (k) {
+
+			return k * k * k * k;
+
+		},
+
+		Out: function (k) {
+
+			return 1 - (--k * k * k * k);
+
+		},
+
+		InOut: function (k) {
+
+			if ((k *= 2) < 1) {
+				return 0.5 * k * k * k * k;
+			}
+
+			return - 0.5 * ((k -= 2) * k * k * k - 2);
+
+		}
+
+	},
+
+	Quintic: {
+
+		In: function (k) {
+
+			return k * k * k * k * k;
+
+		},
+
+		Out: function (k) {
+
+			return --k * k * k * k * k + 1;
+
+		},
+
+		InOut: function (k) {
+
+			if ((k *= 2) < 1) {
+				return 0.5 * k * k * k * k * k;
+			}
+
+			return 0.5 * ((k -= 2) * k * k * k * k + 2);
+
+		}
+
+	},
+
+	Sinusoidal: {
+
+		In: function (k) {
+
+			return 1 - Math.cos(k * Math.PI / 2);
+
+		},
+
+		Out: function (k) {
+
+			return Math.sin(k * Math.PI / 2);
+
+		},
+
+		InOut: function (k) {
+
+			return 0.5 * (1 - Math.cos(Math.PI * k));
+
+		}
+
+	},
+
+	Exponential: {
+
+		In: function (k) {
+
+			return k === 0 ? 0 : Math.pow(1024, k - 1);
+
+		},
+
+		Out: function (k) {
+
+			return k === 1 ? 1 : 1 - Math.pow(2, - 10 * k);
+
+		},
+
+		InOut: function (k) {
+
+			if (k === 0) {
+				return 0;
+			}
+
+			if (k === 1) {
+				return 1;
+			}
+
+			if ((k *= 2) < 1) {
+				return 0.5 * Math.pow(1024, k - 1);
+			}
+
+			return 0.5 * (- Math.pow(2, - 10 * (k - 1)) + 2);
+
+		}
+
+	},
+
+	Circular: {
+
+		In: function (k) {
+
+			return 1 - Math.sqrt(1 - k * k);
+
+		},
+
+		Out: function (k) {
+
+			return Math.sqrt(1 - (--k * k));
+
+		},
+
+		InOut: function (k) {
+
+			if ((k *= 2) < 1) {
+				return - 0.5 * (Math.sqrt(1 - k * k) - 1);
+			}
+
+			return 0.5 * (Math.sqrt(1 - (k -= 2) * k) + 1);
+
+		}
+
+	},
+
+	Elastic: {
+
+		In: function (k) {
+
+			if (k === 0) {
+				return 0;
+			}
+
+			if (k === 1) {
+				return 1;
+			}
+
+			return -Math.pow(2, 10 * (k - 1)) * Math.sin((k - 1.1) * 5 * Math.PI);
+
+		},
+
+		Out: function (k) {
+
+			if (k === 0) {
+				return 0;
+			}
+
+			if (k === 1) {
+				return 1;
+			}
+
+			return Math.pow(2, -10 * k) * Math.sin((k - 0.1) * 5 * Math.PI) + 1;
+
+		},
+
+		InOut: function (k) {
+
+			if (k === 0) {
+				return 0;
+			}
+
+			if (k === 1) {
+				return 1;
+			}
+
+			k *= 2;
+
+			if (k < 1) {
+				return -0.5 * Math.pow(2, 10 * (k - 1)) * Math.sin((k - 1.1) * 5 * Math.PI);
+			}
+
+			return 0.5 * Math.pow(2, -10 * (k - 1)) * Math.sin((k - 1.1) * 5 * Math.PI) + 1;
+
+		}
+
+	},
+
+	Back: {
+
+		In: function (k) {
+
+			var s = 1.70158;
+
+			return k * k * ((s + 1) * k - s);
+
+		},
+
+		Out: function (k) {
+
+			var s = 1.70158;
+
+			return --k * k * ((s + 1) * k + s) + 1;
+
+		},
+
+		InOut: function (k) {
+
+			var s = 1.70158 * 1.525;
+
+			if ((k *= 2) < 1) {
+				return 0.5 * (k * k * ((s + 1) * k - s));
+			}
+
+			return 0.5 * ((k -= 2) * k * ((s + 1) * k + s) + 2);
+
+		}
+
+	},
+
+	Bounce: {
+
+		In: function (k) {
+
+			return 1 - TWEEN.Easing.Bounce.Out(1 - k);
+
+		},
+
+		Out: function (k) {
+
+			if (k < (1 / 2.75)) {
+				return 7.5625 * k * k;
+			} else if (k < (2 / 2.75)) {
+				return 7.5625 * (k -= (1.5 / 2.75)) * k + 0.75;
+			} else if (k < (2.5 / 2.75)) {
+				return 7.5625 * (k -= (2.25 / 2.75)) * k + 0.9375;
+			} else {
+				return 7.5625 * (k -= (2.625 / 2.75)) * k + 0.984375;
+			}
+
+		},
+
+		InOut: function (k) {
+
+			if (k < 0.5) {
+				return TWEEN.Easing.Bounce.In(k * 2) * 0.5;
+			}
+
+			return TWEEN.Easing.Bounce.Out(k * 2 - 1) * 0.5 + 0.5;
+
+		}
+
+	}
+
+};
+
+TWEEN.Interpolation = {
+
+	Linear: function (v, k) {
+
+		var m = v.length - 1;
+		var f = m * k;
+		var i = Math.floor(f);
+		var fn = TWEEN.Interpolation.Utils.Linear;
+
+		if (k < 0) {
+			return fn(v[0], v[1], f);
+		}
+
+		if (k > 1) {
+			return fn(v[m], v[m - 1], m - f);
+		}
+
+		return fn(v[i], v[i + 1 > m ? m : i + 1], f - i);
+
+	},
+
+	Bezier: function (v, k) {
+
+		var b = 0;
+		var n = v.length - 1;
+		var pw = Math.pow;
+		var bn = TWEEN.Interpolation.Utils.Bernstein;
+
+		for (var i = 0; i <= n; i++) {
+			b += pw(1 - k, n - i) * pw(k, i) * v[i] * bn(n, i);
+		}
+
+		return b;
+
+	},
+
+	CatmullRom: function (v, k) {
+
+		var m = v.length - 1;
+		var f = m * k;
+		var i = Math.floor(f);
+		var fn = TWEEN.Interpolation.Utils.CatmullRom;
+
+		if (v[0] === v[m]) {
+
+			if (k < 0) {
+				i = Math.floor(f = m * (1 + k));
+			}
+
+			return fn(v[(i - 1 + m) % m], v[i], v[(i + 1) % m], v[(i + 2) % m], f - i);
+
+		} else {
+
+			if (k < 0) {
+				return v[0] - (fn(v[0], v[0], v[1], v[1], -f) - v[0]);
+			}
+
+			if (k > 1) {
+				return v[m] - (fn(v[m], v[m], v[m - 1], v[m - 1], f - m) - v[m]);
+			}
+
+			return fn(v[i ? i - 1 : 0], v[i], v[m < i + 1 ? m : i + 1], v[m < i + 2 ? m : i + 2], f - i);
+
+		}
+
+	},
+
+	Utils: {
+
+		Linear: function (p0, p1, t) {
+
+			return (p1 - p0) * t + p0;
+
+		},
+
+		Bernstein: function (n, i) {
+
+			var fc = TWEEN.Interpolation.Utils.Factorial;
+
+			return fc(n) / fc(i) / fc(n - i);
+
+		},
+
+		Factorial: (function () {
+
+			var a = [1];
+
+			return function (n) {
+
+				var s = 1;
+
+				if (a[n]) {
+					return a[n];
+				}
+
+				for (var i = n; i > 1; i--) {
+					s *= i;
+				}
+
+				a[n] = s;
+				return s;
+
+			};
+
+		})(),
+
+		CatmullRom: function (p0, p1, p2, p3, t) {
+
+			var v0 = (p2 - p0) * 0.5;
+			var v1 = (p3 - p1) * 0.5;
+			var t2 = t * t;
+			var t3 = t * t2;
+
+			return (2 * p1 - 2 * p2 + v0 + v1) * t3 + (- 3 * p1 + 3 * p2 - 2 * v0 - v1) * t2 + v0 * t + p1;
+
+		}
+
+	}
+
+};
+
+const FLOOR_SPACE = 600;
+
 class Building extends Group {
     constructor(attr = {}) {
         super();
@@ -48216,10 +48915,6 @@ class Building extends Group {
         }
         this.groundFloor = groundFloors;
         this.underFloor = underFloors;
-        this.showFloor(defaultFloor);
-
-        // this.outline = new Shape(this.info.outline[0][0])
-        // this.bounds = this.getBoundingRect(this.outline.getPoints())
 
         this.floors = [];
         floors.forEach(f => {
@@ -48227,50 +48922,33 @@ class Building extends Group {
         });
 
         this.initObject3D();
-    }
 
-    render(context) {
-        if (!this.drawOutline) {
-            throw new Error('call updateOutline first')
-        }
+        this.showFloor(defaultFloor);
 
-        this.getFloor(this.currentFloorNum).render(context);
+        this.onViewModeChange = () => {
+            this.showAllFloors();
+        };
     }
 
     initObject3D() {
         let object = this;
         object.type = 'Building';
         object.sprites = [];
-        this.floors.forEach(floor => {
+        this.floors.forEach((floor, index) => {
             object.add(floor);
             object.sprites.push(...floor.sprites);
-            floor.visible = this.getFloor(this.currentFloorNum) === floor;
+            floor.position.setZ(index * FLOOR_SPACE);
         });
 
-        let points = parsePoints(this.info.outline[0][0]);
-        if (points.length > 0) {
-            let shape = new Shape(points);
-            let extrudeSettings = {
-                depth: object.children.map(a => a.height).reduce((a, b) => a + b) * 4,
-                bevelEnabled: false,
-            };
-            let geometry = new ExtrudeGeometry(shape, extrudeSettings);
-            let mesh = new Mesh(geometry);
-            mesh.onThemeChange = theme => {
-                mesh.material = new MeshBasicMaterial(theme.building);
-                mesh.material.depthTest = false;
-            };
-            mesh.material.depthTest = false;
-            object.outline = mesh;
-            // object.add(mesh)
-        }
+        this.showAllFloors();
 
         object.rotateOnAxis(new Vector3(1, 0, 0), -Math.PI / 2);
     }
 
     updateBound(map) {
-        this.floors.forEach(floor => {
-            if (this.showAll || floor.name === this.currentFloorNum) {
+        this.floors
+            .filter(it => it.visible)
+            .forEach(floor => {
                 for (let i in floor.sprites) {
                     const sprite1 = floor.sprites[i];
                     sprite1.updateBound(map);
@@ -48283,39 +48961,38 @@ class Building extends Group {
                         }
                     }
                 }
-            }
-        });
+            });
     }
 
     showFloor(floorNum) {
         if (floorNum > this.groundFloor || floorNum < -this.underFloor || floorNum === 0) {
             throw new Error('Invalid floor number.')
         }
+        let current = this.getFloor(this.currentFloorNum);
+        let target = this.getFloor(floorNum);
+        if (current == target) {
+            return
+        }
         this.currentFloorNum = floorNum;
-        this.showAll = false;
-        this.visible = true;
-        // this.object3D.outline && (this.object3D.outline.visible = false)
-        this.children
-            .filter(obj => obj.isFloor)
-            .forEach(obj => {
-                obj.visible = obj === this.getFloor(floorNum) || obj.name === floorNum;
-                obj.position.set(0, 0, 0);
-            });
-        this.scale.set(1, 1, 1);
+
+        if (!this._shouldShowAll_()) {
+            if (current) current.visible = false;
+            target.visible = true;
+        }
+
+        let index = this.children.filter(obj => obj.isFloor).findIndex(it => it === target);
+        new TWEEN.Tween(this.position)
+            .to({ y: -index * FLOOR_SPACE }, current != null ? 150 : 0)
+            .onComplete(() => this.updateBound(this.$map))
+            .start();
     }
 
-    showAllFloors(showAll = true) {
-        this.showAll = showAll;
-        this.visible = true;
-        // this.object3D.outline && (this.object3D.outline.visible = true)
-        let offset = 4;
-        this.children.forEach((obj, index) => {
-            obj.visible = true;
+    showAllFloors(showAll = this._shouldShowAll_()) {
+        this.children.forEach(obj => {
             if (obj.isFloor) {
-                obj.position.set(0, 0, index * obj.height * offset);
+                obj.visible = showAll || obj === this.getFloor(this.currentFloorNum);
             }
         });
-        this.scale.set(1, 1, 1);
     }
 
     getCurrentFloor() {
@@ -48325,9 +49002,21 @@ class Building extends Group {
     getFloor(floorNum) {
         return this.floors.find(f => f.name == floorNum)
     }
+
+    _shouldShowAll_() {
+        return !this.$map || (this.$map.viewMode === ViewMode.MODE_3D && this.$map.showAllFloors)
+    }
 }
 
 mixinMapObject(Building, 'Building');
+
+Object.defineProperties(Building.prototype, {
+    floorNames: {
+        get: function() {
+            return this.floors ? this.floors.map(it => it.name) : []
+        },
+    },
+});
 
 class MapLoader extends Loader {
     constructor(is3d) {
@@ -48345,7 +49034,6 @@ class MapLoader extends Loader {
                 url,
                 json => {
                     let data = JSON.parse(json);
-                    window.building = data;
                     resolve(this.parse(data));
                 },
                 undefined,
@@ -48359,8 +49047,8 @@ class MapLoader extends Loader {
 }
 
 var themeNormal = {
-    name: 'test',
-    background: '#f9f9f9',
+    name: 'normal',
+    background: '#f2f2f2',
     building: {
         color: '#000000',
         opacity: 0.1,
@@ -48368,7 +49056,7 @@ var themeNormal = {
         depthTest: false,
     },
     floor: {
-        color: '#f4f4f4',
+        color: '#e0e0e0',
         opacity: 1,
         transparent: false,
     },
@@ -48381,34 +49069,19 @@ var themeNormal = {
     },
     fontStyle: {
         color: '#231815',
-        fontsize: 40,
-        fontface: 'Helvetica, MicrosoftYaHei ',
-    },
-    pubPointImg: {
-        '11001': 'img/100001.png',
-        '11002': 'img/150001.png',
-        '21001': 'img/170001.png',
-        '21002': 'img/170003.png',
-        '21003': 'img/170006.png',
-        '22006': 'img/110001.png',
-        '101': 'img/canyinmeishi.png',
-        '102': 'img/chaoshi.png',
-        '103': 'img/dianqishangcheng.png',
-        '104': 'img/lvxingshe.png',
-        '105': 'img/shangdian.png',
-        '106': 'img/tiyuyongpin.png',
-        '107': 'img/yule.png',
-        '108': 'img/xiyidian.png',
-        '109': 'img/zhubaoshoushi.png',
+        size: 15,
+        face: 'Helvetica, MicrosoftYaHei ',
+        strokeColor: 'white',
+        strokeWidth: 3,
     },
     roomStyle: {
         '101': {
-            color: '#F8D5D3',
+            color: '#1f77b4',
             opacity: 0.7,
             transparent: true,
         },
         '102': {
-            color: '#F8D2B4',
+            color: '#aec7e8',
             opacity: 0.7,
             transparent: true,
         },
@@ -48453,12 +49126,12 @@ var themeNormal = {
             transparent: true,
         },
         '400': {
-            color: '#E2E0D0',
+            color: '#D3D3D3',
             opacity: 0.7,
             transparent: true,
         },
         default: {
-            color: '#D6D9F8',
+            color: '#ffffff',
             opacity: 0.4,
             transparent: true,
         },
@@ -48472,25 +49145,31 @@ class ThemeLoader extends Loader {
         this.textureLoader = new TextureLoader();
         this.themeMap = new Map();
 
-        this._loadTheme('normal', themeNormal);
+        this._loadTheme_('normal', themeNormal);
     }
 
-    load(name, url) {
+    load(name, option) {
         return new Promise((resolve, reject) => {
             if (this.themeMap.has(name)) {
                 reject(new Error('duplicate theme name'));
                 return
+            } else if (typeof option != 'string') {
+                reject(new Error('invalid theme'));
+                return
+            } else if (option.startsWith('{')) {
+                this._loadTheme_(name, option);
+            } else {
+                this.jsonLoader.load(
+                    option,
+                    json => {
+                        resolve(this._loadTheme_(name, json));
+                    },
+                    undefined,
+                    e => {
+                        reject(e);
+                    }
+                );
             }
-            this.jsonLoader.load(
-                url,
-                json => {
-                    resolve(this._loadTheme(name, json));
-                },
-                undefined,
-                e => {
-                    reject(e);
-                }
-            );
         })
     }
 
@@ -48498,15 +49177,16 @@ class ThemeLoader extends Loader {
         return this.themeMap.get(name)
     }
 
-    _loadTheme(name, theme) {
+    _loadTheme_(name, theme) {
         theme = typeof theme === 'string' ? JSON.parse(theme) : theme;
         this.themeMap.set(name, theme);
-        if (Object.keys(theme.pubPointImg)) {
-            theme.materialMap = new Map();
+        theme.materialMap = new Map();
+        if (theme.pubPointImg && Object.keys(theme.pubPointImg)) {
             Object.entries(theme.pubPointImg).forEach(([k, v]) => {
                 let texture = this.textureLoader.load(v, t => {
+                    t.dispatchEvent({ type: 'load' });
                     t.needsUpdate = true;
-                    this.textureUpdated = true;
+                    this.textureNeedsUpdated = true;
                 });
                 texture.minFilter = LinearFilter;
                 let material = new SpriteMaterial({
@@ -48522,12 +49202,24 @@ class ThemeLoader extends Loader {
     }
 }
 
+var themeLoader = new ThemeLoader();
+
 function changeTheme(mo, theme) {
     function changeTheme(object) {
         if (object.onThemeChange) object.onThemeChange(theme);
         if (object.children && object.children.length > 0) {
             object.children.forEach(obj => changeTheme(obj));
         }
+    }
+    let { background = '#f9f9f9' } = theme;
+    if (typeof background === 'object') {
+        let { color, alpha = 1 } = background;
+        mo.renderer.setClearColor(color, alpha);
+    } else {
+        if (typeof background !== 'string') {
+            background = '#f9f9f9';
+        }
+        mo.renderer.setClearColor(background, 1);
     }
     mo.building && changeTheme(mo.building);
 }
@@ -48543,27 +49235,34 @@ function injectMapInstance(mo, object) {
 function loaderMixin(XMap) {
     Object.assign(XMap.prototype, {
         load(fileName) {
-            this.mapLoader.load(fileName).then(building => {
-                this.floorControl.show(building);
-                this.building = building;
-                changeTheme(this, this.themeLoader.getTheme(this._currentTheme));
-                injectMapInstance(this, this.building);
-                this.renderer.setClearColor(this.themeLoader.getTheme().background);
-                this._scene.add(building);
-
-                building.showFloor('F1');
-                this.dispatchEvent({ type: 'mapLoaded' });
-                this._overlays.forEach(overlay => this._addOverlay(overlay));
-
-                this.setDefaultView();
-                if (!this.renderStarted) {
-                    this.renderStarted = true;
-                    this.render();
+            return new Promise((resolve, reject) => {
+                if (this.building) {
+                    this._scene.remove(this.building);
+                    this.building = undefined;
                 }
-                this.renderer.domElement.style.opacity = 1;
-                this.building.updateBound(this);
-                this.setViewMode(this.options.viewMode);
-            });
+                this.mapLoader
+                    .load(fileName)
+                    .then(building => {
+                        this.building = building;
+                        changeTheme(this, this.themeLoader.getTheme(this._currentTheme));
+                        injectMapInstance(this, this.building);
+
+                        this._scene.add(building);
+
+                        building.showFloor('F1');
+
+                        this.dispatchEvent({ type: 'mapLoaded' });
+                        this._overlays.forEach(overlay => this._addOverlay(overlay));
+
+                        this.setDefaultView();
+
+                        this.renderer.domElement.style.opacity = 1;
+                        this.building.updateBound(this);
+                        this.setViewMode(this.options.viewMode);
+                        resolve(this);
+                    })
+                    .catch(e => reject(e));
+            })
         },
 
         loadTheme(name, url) {
@@ -48587,30 +49286,7 @@ function loaderMixin(XMap) {
 
 function initLoaders(mo) {
     mo.mapLoader = new MapLoader(false);
-    mo.themeLoader = new ThemeLoader();
-}
-
-function initMixin(XMap) {
-    Object.assign(XMap.prototype, {
-        _init(el, options) {
-            this.options = options;
-            this.$wrapper = typeof el == 'string' ? document.querySelector(el) : el;
-            this.$wrapper.style.overflow = 'hidden';
-
-            this._overlays = new Set();
-
-            initView(this);
-
-            this.control = new OrbitControl(this._camera, this.$mapWrapper);
-            this.floorControl = new FloorControl(this);
-
-            initEvent(this);
-            initLoaders(this);
-            overlayMixins(this);
-
-            window.map = this;
-        },
-    });
+    mo.themeLoader = themeLoader;
 }
 
 function updateModels(mo) {
@@ -48623,23 +49299,35 @@ function updateModels(mo) {
         }))
         .sort((a, b) => b.position.distance - a.position.distance)
         .forEach((it, index) => {
-            it.overlay.render({
-                x: it.position.x,
-                y: it.position.y,
-                zIndex: index + 10,
-            });
+            if (it.position.distance === Infinity) {
+                it.overlay.render({
+                    x: 0,
+                    y: 0,
+                    zIndex: -100,
+                });
+            } else {
+                it.overlay.render({
+                    x: it.position.x,
+                    y: it.position.y,
+                    zIndex: index + 10,
+                });
+            }
         });
+}
+
+function startRenderer(mo) {
+    mo.render();
 }
 
 function renderMixin(XMap) {
     Object.assign(XMap.prototype, {
         render() {
-            this.renderStarted = true;
             requestAnimationFrame(() => this.render());
-            this.control.update();
+            if (!this.building) return
+            TWEEN.update();
 
-            if (this.control.viewChanged) {
-                this.control.viewChanged = false;
+            if (this.needsUpdate) {
+                this._update_();
                 this._camera.updateProjectionMatrix();
                 this.updateProjectionMatrix = true;
                 updateModels(this);
@@ -48652,6 +49340,247 @@ function renderMixin(XMap) {
             this.renderer.render(this._scene, this._camera);
             this.renderer.clearDepth();
         },
+    });
+}
+
+const __mapState__ = new WeakMap();
+// const __animateTargetState__ = new WeakMap()
+const __animationList__ = new WeakMap();
+
+const EPS = 1e-7;
+const ANIMATE_DURATION = 150;
+
+function initState(mo) {
+    let { rotateAngle = 0, tiltAngle = 60, maxTiltAngle = 75, minTiltAngle = 0 } = mo.options;
+    let state = {
+        rotateAngle: rotateAngle,
+        tiltAngle: tiltAngle,
+        maxTiltAngle: maxTiltAngle,
+        minTiltAngle: minTiltAngle,
+        center: new Vector3(0, 0, 0),
+        scale: 1,
+        height: 5000,
+        viewMode: mo.options.viewMode || ViewMode.MODE_3D,
+        showAllFloors: true,
+    };
+    let tilt = Math.min(state.maxTiltAngle, Math.max(state.tiltAngle, state.minTiltAngle));
+    tilt = Math.max(EPS, Math.min(90 - EPS, tilt));
+    state.tiltAngle = tilt;
+    __mapState__.set(mo, state);
+    __animationList__.set(mo, new Set());
+
+    mo.on('mapLoaded', () => (state.needsUpdate = true));
+}
+
+function changeViewMode(mo, is3dMode) {
+    function changeMode(object) {
+        if (object.onViewModeChange) object.onViewModeChange(is3dMode);
+        if (object.children && object.children.length > 0) {
+            object.children.forEach(obj => changeMode(obj));
+        }
+    }
+    changeMode(mo.building);
+}
+
+function stateMixin(XMap) {
+    Object.assign(XMap.prototype, {
+        reset() {
+            let camAngle = Math.PI / 2;
+            let camDir = [Math.cos(camAngle), Math.sin(camAngle)];
+            let camLen = 5000;
+            let tiltAngle = (75.0 * Math.PI) / 180.0;
+            this._camera.position.set(-camDir[1] * camLen, Math.sin(tiltAngle) * camLen, camDir[0] * camLen);
+            this._camera.lookAt(this._scene.position);
+        },
+
+        setViewMode(mode) {
+            if ((mode !== ViewMode.MODE_2D && mode !== ViewMode.MODE_3D) || mode === __mapState__.get(this).viewMode) {
+                return
+            }
+            __mapState__.get(this).viewMode = mode;
+            __mapState__.get(this).needsUpdate = true;
+
+            changeViewMode(this, mode === ViewMode.MODE_3D);
+
+            this.dispatchEvent({ type: 'stateChanged', message: this.building.currentFloorNum });
+        },
+
+        rotateTo({ angle, duration = ANIMATE_DURATION, callback, animate = true }) {
+            let state = __mapState__.get(this);
+            if (animate) {
+                let animation = new TWEEN.Tween(state)
+                    .to({ rotateAngle: angle }, duration)
+                    .onComplete(() => {
+                        state.needsUpdate = true;
+                        __animationList__.get(this).delete(animation);
+                    })
+                    .start();
+                __animationList__.get(this).add(animation);
+            } else {
+                state.rotateAngle = angle;
+                state.needsUpdate = true;
+                callback && callback();
+            }
+        },
+
+        tiltTo({ angle, duration = ANIMATE_DURATION, callback, animate = true }) {
+            let state = __mapState__.get(this);
+            angle = Math.min(state.maxTiltAngle, Math.max(angle, state.minTiltAngle));
+            angle = Math.max(EPS, Math.min(90 - EPS, angle));
+            if (__mapState__.get(this).viewMode === ViewMode.MODE_2D) {
+                return
+            }
+            if (animate) {
+                let animation = new TWEEN.Tween(state)
+                    .to({ tiltAngle: angle }, duration)
+                    .onComplete(() => {
+                        state.needsUpdate = true;
+                        __animationList__.get(this).delete(animation);
+                    })
+                    .start();
+                __animationList__.get(this).add(animation);
+            } else {
+                __mapState__.get(this).tiltAngle = angle;
+                __mapState__.get(this).needsUpdate = true;
+                callback && callback();
+            }
+        },
+
+        zoomIn(scale = 1.25) {
+            this._scale_(scale);
+        },
+
+        zoomOut(scale = 0.8) {
+            this._scale_(scale);
+        },
+
+        setFloor(floor) {
+            this.building.showFloor(floor);
+            __mapState__.get(this).needsUpdate = true;
+
+            this.dispatchEvent({ type: 'floorChanged', message: floor });
+        },
+
+        setShowAllFloors(showAll = true) {
+            this.building.showAllFloors(showAll);
+            __mapState__.get(this).showAllFloors = !!showAll;
+            __mapState__.get(this).needsUpdate = true;
+
+            this.dispatchEvent({ type: 'stateChanged' });
+        },
+
+        _scale_(scale) {
+            __mapState__.get(this).scale *= scale;
+            __mapState__.get(this).needsUpdate = true;
+        },
+
+        _translate_({ x, y, z }) {
+            __mapState__.get(this).center.add({ x, y, z });
+            __mapState__.get(this).needsUpdate = true;
+        },
+
+        _update_: (function() {
+            let offsetVector = new Vector3();
+            return function() {
+                let state = __mapState__.get(this);
+                state.needsUpdate = false;
+                let position = this._camera.position;
+
+                let rotate = state.rotateAngle - 90;
+                let tilt = EPS;
+                let radius = state.height / state.scale;
+                let center = state.center;
+
+                if (state.viewMode === ViewMode.MODE_3D) {
+                    tilt = Math.min(state.maxTiltAngle, Math.max(state.tiltAngle, state.minTiltAngle));
+                    tilt = Math.max(EPS, Math.min(90 - EPS, tilt));
+                }
+                rotate = (rotate / 180) * Math.PI;
+                tilt = (tilt / 180) * Math.PI;
+                offsetVector.x = radius * Math.sin(tilt) * Math.sin(rotate);
+                offsetVector.y = radius * Math.cos(tilt);
+                offsetVector.z = radius * Math.sin(tilt) * Math.cos(rotate);
+
+                position.copy(center).add(offsetVector);
+                this._camera.lookAt(center);
+            }
+        })(),
+    });
+    Object.defineProperties(XMap.prototype, {
+        rotateAngle: {
+            get: function() {
+                return __mapState__.get(this).rotateAngle
+            },
+        },
+        tiltAngle: {
+            get: function() {
+                return __mapState__.get(this).tiltAngle
+            },
+        },
+        scale: {
+            get: function() {
+                return __mapState__.get(this).scale
+            },
+        },
+        viewMode: {
+            get: function() {
+                return __mapState__.get(this).viewMode
+            },
+        },
+        needsUpdate: {
+            get: function() {
+                let { needsUpdate = true } = __mapState__.get(this);
+                return needsUpdate || __animationList__.get(this).size > 0
+            },
+        },
+        currentFloor: {
+            get: function() {
+                return this.building.currentFloorNum
+            },
+            set: function(value) {
+                this.setFloor(value);
+            },
+        },
+        showAllFloors: {
+            get: function() {
+                return __mapState__.get(this).showAllFloors
+            },
+            set: function(value) {
+                this.setShowAllFloors(value);
+            },
+        },
+    });
+}
+
+function initMixin(XMap) {
+    Object.assign(XMap.prototype, {
+        _init(el, options) {
+            this.options = options;
+            this.$wrapper = typeof el == 'string' ? document.querySelector(el) : el;
+            this.$wrapper.style.overflow = 'hidden';
+            this.$wrapper.style.display = 'relative !important';
+
+            this._overlays = new Set();
+
+            initView(this);
+            initState(this);
+
+            this.gestureControl = new GestureControl(this);
+            new FloorControl(this);
+
+            initEvent(this);
+
+            initLoaders(this);
+            startRenderer(this);
+
+            window.map = this;
+        },
+    });
+    Object.defineProperties(XMap.prototype, {
+        isMap: {
+            writable: false,
+            value: true
+        }
     });
 }
 
@@ -48682,7 +49611,7 @@ function styleInject(css, ref) {
   }
 }
 
-var css = ".imap-controls, .imap-overlays {\r\n    position: static;\r\n    top: 0;\r\n    left: 0;\r\n    pointer-events: none;\r\n    overflow: hidden;\r\n}\r\n\r\n.imap-controls *, .imap-overlays * {\r\n    pointer-events: auto;\r\n}\r\n\r\n.imap-floor-control {\r\n    position: absolute;\r\n    right: 10px;\r\n    top: 10px;\r\n    z-index: 100;\r\n    background: white;\r\n    border: solid 1px #dfdfdf;\r\n    text-align: center;\r\n    border-radius: 3px;\r\n    font-size: 14px;\r\n    padding: 0;\r\n}\r\n\r\n.imap-floor-control li {\r\n    list-style: none;\r\n    line-height: 40px;\r\n    width: 40px;\r\n    height: 40px;\r\n    border-bottom: solid 1px #dfdfdf;\r\n}\r\n\r\n.imap-floor-control li:last-child {\r\n    border-bottom: none;\r\n}";
+var css = ".xmap-controls, .xmap-overlays {\r\n    width: 100%;\r\n    height: 100%;\r\n    position: absolute;\r\n    left: 0;\r\n    top: 0;\r\n    pointer-events: none;\r\n    overflow: hidden;\r\n}\r\n\r\n.xmap-controls *, .xmap-overlays * {\r\n    pointer-events: auto;\r\n}\r\n\r\n.xmap-floor-control {\r\n    position: absolute;\r\n    right: 10px;\r\n    top: 10px;\r\n    z-index: 100;\r\n    background: white;\r\n    border: solid 1px #dfdfdf;\r\n    text-align: center;\r\n    border-radius: 3px;\r\n    font-size: 14px;\r\n    padding: 0;\r\n    color: #333;\r\n}\r\n\r\n.xmap-floor-control li {\r\n    list-style: none;\r\n    line-height: 40px;\r\n    width: 40px;\r\n    height: 40px;\r\n    border-bottom: solid 1px #dfdfdf;\r\n    -ms-user-select: none;\r\n    -webkit-user-select: none;\r\n    user-select: none;\r\n}\r\n\r\n.xmap-floor-control li:last-child {\r\n    border-bottom: none;\r\n}\r\n\r\n.xmap-floor-control .active:not(.btn-all) {\r\n    background-color: #e6e6e6;\r\n    -webkit-box-shadow: inset 0 3px 5px rgba(0, 0, 0, .125);\r\n    box-shadow: inset 0 3px 5px rgba(0, 0, 0, .125);\r\n    outline: 0;\r\n}\r\n\r\n.xmap-floor-control .btn-all.active {\r\n    background: #3c84d0;\r\n    color: white;\r\n}";
 styleInject(css);
 
 class XMap {
@@ -48696,6 +49625,7 @@ overlayMixin(XMap);
 loaderMixin(XMap);
 viewMixin(XMap);
 renderMixin(XMap);
+stateMixin(XMap);
 
 class Location {
     constructor(floor, x, y, z = 0) {
@@ -48717,6 +49647,153 @@ class Size {
 var Models = {
     Location,
     Size,
+};
+
+class Overlay {
+    constructor() {}
+
+    show() {
+        this.visible = true;
+    }
+
+    hide() {
+        this.visible = false;
+    }
+
+    removeFromParent() {
+        if (this.object3D && this.object3D.parent) {
+            this.object3D.parent.remove(this.object3D);
+        }
+    }
+
+    setLocation(location /*, animate*/) {
+        this.currentLocation = location;
+        this.object3D.position.copy(location.localPosition);
+    }
+}
+
+eventMixin(Overlay);
+
+Object.defineProperties(Overlay.prototype, {
+    visible: {
+        enumerable: true,
+        configurable: false,
+        get: function() {
+            return this.object3D && this.object3D.visible
+        },
+        set: function(value) {
+            this.object3D && (this.object3D.visible = value);
+        },
+    },
+
+    isOverlay: {
+        value: true,
+        writable: false,
+    },
+});
+
+class HTMLOverlay extends Overlay {
+    constructor(location, options) {
+        super();
+
+        this.location = location;
+        this.options = options;
+        
+        if (typeof this.initialize !== 'function' || typeof this.render !== 'function') {
+            throw new Error('initialize && render must be implements')
+        }
+        this.$el = this.initialize();
+    }
+}
+
+Object.defineProperties(HTMLOverlay.prototype, {
+    isHTMLOverlay: {
+        value: true,
+        writable: false,
+    },
+});
+
+const PUB_POINT_SIZE$1 = new Vector2(20, 20);
+
+class Marker extends Overlay {
+    constructor(location, options = {}) {
+        super();
+
+        this.options = options;
+        this.currentLocation = location;
+        this.location = location;
+        this.floor = location.floor;
+        this.position = location.localPosition;
+
+        this.initObject3D();
+    }
+
+    initObject3D() {
+        let { icon } = this.options;
+
+        this.texture = new TextureLoader().load(icon, t => {
+            t.needsUpdate = true;
+        });
+        this.texture.minFilter = LinearFilter;
+        this.material = new SpriteMaterial({
+            map: this.texture,
+            sizeAttenuation: false,
+            transparent: true,
+            alphaTest: 0.1,
+            // depthTest: false,
+        });
+
+        let sprite = new Sprite(this.material);
+        let size = PUB_POINT_SIZE$1;
+        if (typeof this.options.size === 'number' || typeof this.options.size === 'string') {
+            size = Number(this.options.size);
+            size = new Vector2(size, size);
+        } else if (this.options.size && this.options.size.width > 0) {
+            size = this.options.size;
+        }
+        let align = this.options.align || 'CENTER';
+        sprite.width = size.width;
+        sprite.height = size.height;
+        sprite.position.copy(this.position);
+        sprite.handler = this;
+        sprite.type = 'Marker';
+        if (align === 'CENTER') {
+            sprite.center.set(0.5, 0.5);
+        } else if (align === 'BOTTOM') {
+            sprite.center.set(0.5, 0);
+        }
+        sprite.renderOrder = 10;
+        sprite.onViewModeChange = is3dMode => sprite.position.setZ(is3dMode ? this.currentLocation.z : 4);
+        this.object3D = sprite;
+        return sprite
+    }
+}
+
+class HTMLInfoWindow extends HTMLOverlay {
+    initialize() {
+        let span = document.createElement('span');
+        span.style.border = 'solid 1px red';
+        span.style.background = 'white';
+        span.style.position = 'absolute';
+        span.style.padding = '3px 4px';
+        span.style.width = '130px';
+        span.style.fontSize = '14px';
+        span.appendChild(document.createTextNode(this.options.content));
+        return span
+    }
+
+    render(position) {
+        this.$el.style.left = position.x + 'px';
+        this.$el.style.top = position.y - this.$el.clientHeight + 'px';
+        this.$el.style.zIndex = position.zIndex;
+    }
+}
+
+var Overlays = {
+    Overlay,
+    HTMLOverlay,
+    Marker,
+    HTMLInfoWindow,
 };
 
 // import Label from './label'

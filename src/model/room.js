@@ -13,12 +13,10 @@ import {
     LineBasicMaterial,
     MeshPhongMaterial,
     MeshLambertMaterial,
-    MeshStandardMaterial,
     TextureLoader,
     DoubleSide,
     LinearFilter,
     RepeatWrapping,
-    Color,
 } from '../libs/threejs/three.module'
 import { mixinMapObject } from './map-object'
 import { parsePoints } from '../utils/view'
@@ -48,6 +46,8 @@ class Room extends Mesh {
         let geometry3d = new ExtrudeGeometry(shape, extrudeSettings)
         let geometry2d = new ShapeGeometry(shape)
         this.geometry = geometry3d
+        this.material = new MeshLambertMaterial()
+        this.material.alphaTest = 0.1
         let object = this
         object.onViewModeChange = is3dMode => {
             object.geometry = is3dMode ? geometry3d : geometry2d
@@ -57,36 +57,18 @@ class Room extends Mesh {
         object.handler = this
         object.box = new Box2().setFromPoints(points)
 
-        geometry = new Geometry().setFromPoints(points)
-        let wire = new LineLoop(geometry)
-        wire.position.set(0, 0, this.floor.info.height)
-        wire.onViewModeChange = is3dMode => wire.position.setZ(is3dMode ? this.floor.info.height : 2)
-        object.add(wire)
-
-        this.onThemeChange = theme => {
-            let roomStyle = theme.roomStyle[this.info.category] || theme.roomStyle['default']
-            this.material = new MeshLambertMaterial(roomStyle)
-            wire.material = new LineBasicMaterial({
-                ...theme.strokeStyle,
-                color: new Color(roomStyle.color).multiplyScalar(0.5),
-            })
-        }
-
         if (this.info.walls) {
             object.material.opacity = 0
             geometry = new ShapeGeometry(shape)
-            let groundMaterial = new MeshStandardMaterial({
-                roughness: 0.8,
-                metalness: 0.5,
-            })
+            let groundMaterial = new MeshPhongMaterial()
             let textureLoader = new TextureLoader()
-            textureLoader.load('./textures/floor-board.jpg', function(map) {
-                map.wrapS = RepeatWrapping
-                map.wrapT = RepeatWrapping
-                map.anisotropy = 16
-                map.repeat.set(0.005, 0.005)
-                map.minFilter = LinearFilter
-                groundMaterial.map = map
+            textureLoader.load('./textures/floor-board.jpg', function(texture) {
+                texture.minFilter = LinearFilter
+                texture.wrapS = RepeatWrapping
+                texture.wrapT = RepeatWrapping
+                texture.anisotropy = 16
+                texture.repeat.set(0.01, 0.01)
+                groundMaterial.map = texture
                 groundMaterial.needsUpdate = true
             })
             mesh = new Mesh(geometry, groundMaterial)
@@ -99,6 +81,7 @@ class Room extends Mesh {
                 flatShading: true,
                 opacity: 0.5,
                 transparent: true,
+                alphaTest: 0.1,
             })
             this.info.walls.forEach(wall => {
                 let points = parsePoints(wall)
@@ -110,13 +93,28 @@ class Room extends Mesh {
                     (points[0].y + points[1].y) / 2,
                     this.floor.info.height / 2
                 )
-                cube.rotation.z = points[0].sub(points[1]).angle() + Math.PI / 2
+                cube.rotation.z = points[0].sub(points[1]).angle() + (Math.PI * 3) / 2
                 cube.onViewModeChange = is3dMode => {
                     cube.geometry = is3dMode ? geometry3d : geometry2d
                     cube.position.setZ(is3dMode ? this.floor.info.height / 2 : 2)
                 }
                 object.add(cube)
             })
+        } else {
+            geometry = new Geometry().setFromPoints(points)
+            let wire = new LineLoop(geometry)
+            wire.material = new LineBasicMaterial()
+            wire.material.alphaTest = 0.1
+            wire.position.set(0, 0, this.floor.info.height)
+            wire.onViewModeChange = is3dMode => wire.position.setZ(is3dMode ? this.floor.info.height : 2)
+            object.add(wire)
+
+            this.onThemeChange = theme => {
+                let roomStyle = theme.roomStyle[this.info.category] || theme.roomStyle['default']
+                this.material.setValues(roomStyle)
+                wire.material.setValues(roomStyle)
+                wire.material.color.multiplyScalar(0.5)
+            }
         }
         if (this.info.pillars) {
             let material = new MeshLambertMaterial({
@@ -145,10 +143,11 @@ class Room extends Mesh {
         let sprite = new Label(this.info.name)
         sprite.onThemeChange = theme => {
             let material = theme.materialMap.get(this.info.category + '')
-            if (!material || !material.map || !material.map.image) {
-                sprite.options.icon = undefined
+            sprite.setOptions(theme.fontStyle)
+            if (!material || !material.map) {
+                sprite.setIcon()
             } else {
-                sprite.options.icon = material.map.image
+                sprite.setIcon({ icon: material.map })
             }
             sprite.needsUpdate = true
         }

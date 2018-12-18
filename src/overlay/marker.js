@@ -13,10 +13,10 @@ class Marker extends Overlay {
         this.floor = location.floor
         this.position = location.localPosition
 
-        this.makeObject3D()
+        this.initObject3D()
     }
 
-    makeObject3D() {
+    initObject3D() {
         let { icon } = this.options
 
         this.texture = new TextureLoader().load(icon, t => {
@@ -28,7 +28,7 @@ class Marker extends Overlay {
             sizeAttenuation: false,
             transparent: true,
             alphaTest: 0.1,
-            depthTest: false,
+            // depthTest: false,
         })
 
         let sprite = new Sprite(this.material)
@@ -42,7 +42,6 @@ class Marker extends Overlay {
         let align = this.options.align || 'CENTER'
         sprite.width = size.width
         sprite.height = size.height
-        sprite.scale.set(size.width / this.canvasScale, size.width / this.canvasScale, 1)
         sprite.position.copy(this.position)
         sprite.handler = this
         sprite.type = 'Marker'
@@ -52,7 +51,7 @@ class Marker extends Overlay {
             sprite.center.set(0.5, 0)
         }
         sprite.renderOrder = 10
-        sprite.onViewModeChange = is3dMode => sprite.position.setZ(is3dMode ? this.currentLocation.z : 3)
+        sprite.onViewModeChange = is3dMode => sprite.position.setZ(is3dMode ? this.currentLocation.z : 4)
         this.object3D = sprite
         return sprite
     }

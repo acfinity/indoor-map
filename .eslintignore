@@ -1,4 +1,4 @@
-/src/libs/three*
+/src/libs/*
 /build/*
 /dist/*
 /utils/*

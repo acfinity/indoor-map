@@ -1,5 +1,5 @@
 import MapLoader from '../loaders/map-loader'
-import ThemeLoader from '../loaders/theme-loader'
+import themeLoader from '../loaders/theme-loader'
 
 function changeTheme(mo, theme) {
     function changeTheme(object) {
@@ -7,6 +7,16 @@ function changeTheme(mo, theme) {
         if (object.children && object.children.length > 0) {
             object.children.forEach(obj => changeTheme(obj))
         }
+    }
+    let { background = '#f9f9f9' } = theme
+    if (typeof background === 'object') {
+        let { color, alpha = 1 } = background
+        mo.renderer.setClearColor(color, alpha)
+    } else {
+        if (typeof background !== 'string') {
+            background = '#f9f9f9'
+        }
+        mo.renderer.setClearColor(background, 1)
     }
     mo.building && changeTheme(mo.building)
 }
@@ -22,23 +32,33 @@ function injectMapInstance(mo, object) {
 export function loaderMixin(XMap) {
     Object.assign(XMap.prototype, {
         load(fileName) {
-            this.mapLoader.load(fileName).then(building => {
-                this.floorControl.show(building)
-                this.building = building
-                changeTheme(this, this.themeLoader.getTheme(this._currentTheme))
-                injectMapInstance(this, this.building)
-                this.renderer.setClearColor(this.themeLoader.getTheme().background)
-                this._scene.add(building)
+            return new Promise((resolve, reject) => {
+                if (this.building) {
+                    this._scene.remove(this.building)
+                    this.building = undefined
+                }
+                this.mapLoader
+                    .load(fileName)
+                    .then(building => {
+                        this.building = building
+                        changeTheme(this, this.themeLoader.getTheme(this._currentTheme))
+                        injectMapInstance(this, this.building)
 
-                building.showFloor('F1')
-                this.dispatchEvent({ type: 'mapLoaded' })
-                this._overlays.forEach(overlay => this._addOverlay(overlay))
+                        this._scene.add(building)
 
-                this.setDefaultView()
+                        building.showFloor('F1')
 
-                this.renderer.domElement.style.opacity = 1
-                this.building.updateBound(this)
-                this.setViewMode(this.options.viewMode)
+                        this.dispatchEvent({ type: 'mapLoaded' })
+                        this._overlays.forEach(overlay => this._addOverlay(overlay))
+
+                        this.setDefaultView()
+
+                        this.renderer.domElement.style.opacity = 1
+                        this.building.updateBound(this)
+                        this.setViewMode(this.options.viewMode)
+                        resolve(this)
+                    })
+                    .catch(e => reject(e))
             })
         },
 
@@ -63,5 +83,5 @@ export function loaderMixin(XMap) {
 
 export function initLoaders(mo) {
     mo.mapLoader = new MapLoader(false)
-    mo.themeLoader = new ThemeLoader()
+    mo.themeLoader = themeLoader
 }

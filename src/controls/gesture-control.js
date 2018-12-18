@@ -12,7 +12,7 @@ const STATE = {
 }
 const userRotateSpeed = 2.0
 const autoRotateSpeed = 1.0
-const autoRotationAngle = ((2 * Math.PI) / 60 / 60) * autoRotateSpeed
+const autoRotationAngle = (360 / 60 / 60) * autoRotateSpeed
 const PIXELS_PER_ROUND = 1800
 const SCALE_STEP = 1.05
 const TOUCH_SCALE_STEP = 1.03
@@ -51,19 +51,19 @@ class GestureControl {
     }
 
     rotateLeft(angle = autoRotationAngle) {
-        this.$map.rotateTo({ angle: this.$map.rotateAngle - angle })
+        this.$map.rotateTo({ angle: this.$map.rotateAngle - angle, animate: false })
     }
 
     rotateRight(angle = autoRotationAngle) {
-        this.$map.rotateTo({ angle: this.$map.rotateAngle + angle })
+        this.$map.rotateTo({ angle: this.$map.rotateAngle + angle, animate: false })
     }
 
     rotateUp(angle = autoRotationAngle) {
-        this.$map.tiltTo({ angle: this.$map.tiltAngle - angle })
+        this.$map.tiltTo({ angle: this.$map.tiltAngle - angle, animate: false })
     }
 
     rotateDown(angle = autoRotationAngle) {
-        this.$map.tiltTo({ angle: this.$map.tiltAngle + angle })
+        this.$map.tiltTo({ angle: this.$map.tiltAngle + angle, animate: false })
     }
 
     _initVars() {
@@ -174,8 +174,8 @@ class GestureControl {
                 return
             }
             if (this.state === STATE.ROTATE) {
-                this.rotateLeft(((2 * Math.PI * this.deltaVector.x) / PIXELS_PER_ROUND) * userRotateSpeed)
-                this.rotateUp(((2 * Math.PI * this.deltaVector.y) / PIXELS_PER_ROUND) * userRotateSpeed)
+                this.rotateLeft(((360 * this.deltaVector.x) / PIXELS_PER_ROUND) * userRotateSpeed)
+                this.rotateUp(((360 * this.deltaVector.y) / PIXELS_PER_ROUND) * userRotateSpeed)
             } else if (this.state === STATE.ZOOM) {
                 if (this.deltaVector.y > 0) {
                     this.$map.zoomIn()

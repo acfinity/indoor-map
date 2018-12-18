@@ -1,4 +1,5 @@
-/src/libs/three.*
+/src/libs/**/three.*
+/src/libs/*.js
 /build/*
 /dist/*
 /utils/*

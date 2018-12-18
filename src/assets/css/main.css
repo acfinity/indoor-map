@@ -1,6 +1,6 @@
-.imap-controls, .imap-overlays {
-    width: inherit;
-    height: inherit;
+.xmap-controls, .xmap-overlays {
+    width: 100%;
+    height: 100%;
     position: absolute;
     left: 0;
     top: 0;
@@ -8,11 +8,11 @@
     overflow: hidden;
 }
 
-.imap-controls *, .imap-overlays * {
+.xmap-controls *, .xmap-overlays * {
     pointer-events: auto;
 }
 
-.imap-floor-control {
+.xmap-floor-control {
     position: absolute;
     right: 10px;
     top: 10px;
@@ -23,16 +23,32 @@
     border-radius: 3px;
     font-size: 14px;
     padding: 0;
+    color: #333;
 }
 
-.imap-floor-control li {
+.xmap-floor-control li {
     list-style: none;
     line-height: 40px;
     width: 40px;
     height: 40px;
     border-bottom: solid 1px #dfdfdf;
+    -ms-user-select: none;
+    -webkit-user-select: none;
+    user-select: none;
 }
 
-.imap-floor-control li:last-child {
+.xmap-floor-control li:last-child {
     border-bottom: none;
+}
+
+.xmap-floor-control .active:not(.btn-all) {
+    background-color: #e6e6e6;
+    -webkit-box-shadow: inset 0 3px 5px rgba(0, 0, 0, .125);
+    box-shadow: inset 0 3px 5px rgba(0, 0, 0, .125);
+    outline: 0;
+}
+
+.xmap-floor-control .btn-all.active {
+    background: #3c84d0;
+    color: white;
 }

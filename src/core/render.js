@@ -1,3 +1,5 @@
+import TWEEN from '../libs/Tween'
+
 function updateModels(mo) {
     mo.building && mo.building.updateBound(mo)
     Array.from(mo._overlays)
@@ -33,6 +35,8 @@ export function renderMixin(XMap) {
         render() {
             requestAnimationFrame(() => this.render())
             if (!this.building) return
+            TWEEN.update()
+
             if (this.needsUpdate) {
                 this._update_()
                 this._camera.updateProjectionMatrix()
