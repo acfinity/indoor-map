@@ -23,12 +23,13 @@ import { parsePoints } from '../utils/view'
 import Label from './label'
 
 class Room extends Mesh {
-    constructor(floor, attr) {
+    constructor(floor, attr = {}) {
         super()
         this.floor = floor
         this.info = attr
         let { name } = attr
         this.name = name
+        this.info.height = this.info.height || this.floor.info.height
 
         this.initObject3D()
     }
@@ -40,22 +41,21 @@ class Room extends Mesh {
         let geometry
 
         let extrudeSettings = {
-            depth: this.floor.info.height,
+            depth: this.info.height,
             bevelEnabled: false,
         }
         let geometry3d = new ExtrudeGeometry(shape, extrudeSettings)
         let geometry2d = new ShapeGeometry(shape)
         this.geometry = geometry3d
         this.material = new MeshLambertMaterial()
-        this.material.depthWrite = false
+        this.material.alphaTest = 0.1
         let object = this
         object.onViewModeChange = is3dMode => {
             object.geometry = is3dMode ? geometry3d : geometry2d
             object.position.setZ(is3dMode ? 0 : 1)
         }
-        object.type = 'Room'
-        object.handler = this
-        object.box = new Box2().setFromPoints(points)
+        this.type = 'Room'
+        let box = new Box2()
 
         if (this.info.walls) {
             object.material.opacity = 0
@@ -82,7 +82,7 @@ class Room extends Mesh {
                 flatShading: true,
                 opacity: 0.5,
                 transparent: true,
-                depthWrite: false,
+                alphaTest: 0.1,
             })
             this.info.walls.forEach(wall => {
                 let points = parsePoints(wall)
@@ -105,9 +105,9 @@ class Room extends Mesh {
             geometry = new Geometry().setFromPoints(points)
             let wire = new LineLoop(geometry)
             wire.material = new LineBasicMaterial()
-            wire.material.depthWrite = false
+            wire.material.alphaTest = 0.1
             wire.position.set(0, 0, this.floor.info.height)
-            wire.onViewModeChange = is3dMode => wire.position.setZ(is3dMode ? this.floor.info.height : 2)
+            wire.onViewModeChange = is3dMode => wire.position.setZ(is3dMode ? this.info.height : 2)
             object.add(wire)
 
             this.onThemeChange = theme => {
@@ -122,20 +122,19 @@ class Room extends Mesh {
                 color: 0xffffff,
                 emissive: 0x555555,
             })
-            let box = new Box2(),
-                center = new Vector2(),
+            let center = new Vector2(),
                 size = new Vector2()
             this.info.pillars.forEach(pillar => {
                 let points = parsePoints(pillar)
                 box.setFromPoints(points).getCenter(center)
                 box.getSize(size)
-                let geometry3d = new BoxBufferGeometry(size.width, size.height, this.floor.info.height)
+                let geometry3d = new BoxBufferGeometry(size.width, size.height, this.info.height)
                 let geometry2d = new PlaneGeometry(size.width, size.height)
                 let cube = new Mesh(geometry3d, material)
-                cube.position.set(center.x, center.y, this.floor.info.height / 2)
+                cube.position.set(center.x, center.y, this.info.height / 2)
                 cube.onViewModeChange = is3dMode => {
                     cube.geometry = is3dMode ? geometry3d : geometry2d
-                    cube.position.setZ(is3dMode ? this.floor.info.height / 2 : 2)
+                    cube.position.setZ(is3dMode ? this.info.height / 2 : 2)
                 }
                 object.add(cube)
             })
@@ -153,7 +152,7 @@ class Room extends Mesh {
             sprite.needsUpdate = true
         }
         if (sprite) {
-            let center = object.box.getCenter(new Vector2())
+            let center = box.setFromPoints(points).getCenter(new Vector2())
             sprite.position.set(center.x, center.y, this.floor.info.height + 5)
             sprite.center.set(0.5, 0)
             sprite.renderOrder = 1
@@ -165,6 +164,14 @@ class Room extends Mesh {
     }
 }
 
-mixinMapObject(Room, 'Room')
+mixinMapObject(Room)
+
+Object.defineProperties(Room.prototype, {
+    isRoom: {
+        configurable: false,
+        writable: false,
+        value: true,
+    },
+})
 
 export default Room

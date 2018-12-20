@@ -1,9 +1,19 @@
-import { Vector2, Vector3, Raycaster, EventDispatcher } from '../libs/threejs/three.module'
+import { Vector2, EventDispatcher } from '../libs/threejs/three.module'
+import { getCameraRaycast } from './view'
 
 const __preHover__ = new WeakMap()
 
 export function eventMixin(Class) {
-    Object.assign(Class.prototype, EventDispatcher.prototype)
+    if (!Class.prototype.dispatchEvent) {
+        Object.assign(Class.prototype, EventDispatcher.prototype)
+    }
+    Object.assign(Class.prototype, {
+        hasEventListener: function(type, listener) {
+            if (this._listeners === undefined) return false
+            var listeners = this._listeners
+            return listeners[type] !== undefined && (!listener || listeners[type].indexOf(listener) !== -1)
+        },
+    })
     const eventMap = new Map()
     const bindEvent = (mo, eventType, fn, once) => {
         let thisMap = eventMap.get(mo)
@@ -39,27 +49,22 @@ export function eventMixin(Class) {
 }
 
 export const initEvent = (function() {
-    const raycaster = new Raycaster()
     const mouse = new Vector2()
-    const vector = new Vector3(mouse.x, mouse.y, 0.5)
     const intersectObjects = function(eventType, mo, e) {
         if (!mo.building) {
             return
         }
         let point = e.touches ? e.touches[0] : e
-        vector.set(
-            (point.pageX / mo.$wrapper.clientWidth) * 2 - 1,
-            -(point.pageY / mo.$wrapper.clientHeight) * 2 + 1,
-            0.5
-        )
-        raycaster.setFromCamera(vector, mo._camera)
+        mouse.set(point.pageX, point.pageY)
+
+        let raycaster = getCameraRaycast(mo, mouse)
         return raycaster.intersectObjects(
             [...mo._overlays]
                 .filter(it => it.hasEventListener(eventType))
                 .map(it => it.object3D)
                 .concat(mo.building.floors)
                 .filter(it => it.visible),
-            true
+            false
         )
     }
     return function(mo) {

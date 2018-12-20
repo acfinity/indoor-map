@@ -34,6 +34,14 @@ class PubPoint extends XSprite {
     }
 }
 
-mixinMapObject(PubPoint, 'PubPoint')
+mixinMapObject(PubPoint)
+
+Object.defineProperties(PubPoint.prototype, {
+    isPubPoint: {
+        configurable: false,
+        writable: false,
+        value: true,
+    },
+})
 
 export default PubPoint

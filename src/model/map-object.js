@@ -1,20 +1,17 @@
 import { eventMixin } from '../core/event'
 
-export const mixinMapObject = function(Class, type) {
+export const mixinMapObject = function(Class) {
     eventMixin(Class)
-    Object.assign(Class.prototype, {})
     Object.defineProperties(Class.prototype, {
         isMapObject: {
+            configurable: false,
             writable: false,
             value: true,
         },
-    })
-    if (type) {
-        Object.defineProperties(Class.prototype, {
-            [`is${type}`]: {
-                writable: false,
-                value: true,
+        $map: {
+            get: function() {
+                return this.parent && this.parent.$map
             },
-        })
-    }
+        },
+    })
 }

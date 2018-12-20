@@ -135,6 +135,14 @@ class Label extends XSprite {
     }
 }
 
-mixinMapObject(Label, 'Label')
+mixinMapObject(Label)
+
+Object.defineProperties(Label.prototype, {
+    isLabel: {
+        configurable: false,
+        writable: false,
+        value: true,
+    },
+})
 
 export default Label

@@ -56,7 +56,7 @@ class ThemeLoader extends Loader {
                     map: texture,
                     sizeAttenuation: false,
                     transparent: true,
-                    depthWrite: false,
+                    alphaTest: 0.1,
                 })
                 theme.materialMap.set(k, material)
             })

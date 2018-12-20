@@ -25230,10 +25230,17 @@ Sprite.prototype = Object.assign( Object.create( Object3D.prototype ), {
 			}
 
 			var center = this.center;
+			console.log(mvPosition)
+			console.log(center)
+			console.log(worldScale)
 
 			transformVertex( vA.set( - 0.5, - 0.5, 0 ), mvPosition, center, worldScale, sin, cos );
 			transformVertex( vB.set( 0.5, - 0.5, 0 ), mvPosition, center, worldScale, sin, cos );
 			transformVertex( vC.set( 0.5, 0.5, 0 ), mvPosition, center, worldScale, sin, cos );
+
+			console.log(vA)
+			console.log(vB)
+			console.log(vC)
 
 			uvA.set( 0, 0 );
 			uvB.set( 1, 0 );
@@ -25247,6 +25254,7 @@ Sprite.prototype = Object.assign( Object.create( Object3D.prototype ), {
 				// check second triangle
 				transformVertex( vB.set( - 0.5, 0.5, 0 ), mvPosition, center, worldScale, sin, cos );
 				uvB.set( 0, 1 );
+				console.log(vB)
 
 				intersect = raycaster.ray.intersectTriangle( vA, vC, vB, false, intersectPoint );
 				if ( intersect === null ) {

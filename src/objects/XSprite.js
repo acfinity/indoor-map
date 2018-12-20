@@ -4,7 +4,10 @@ class XSprite extends Sprite {
     constructor(...args) {
         super(...args)
 
+        // to resolve flash when first show
         this.scale.set(1e-7, 1e-7, 1)
+
+        this.type = 'XSprite'
 
         Object.defineProperties(this, {
             boundBox: {
@@ -22,6 +25,14 @@ class XSprite extends Sprite {
         }
     }
 }
+
+Object.defineProperties(XSprite.prototype, {
+    isXSprite: {
+        configurable: false,
+        writable: false,
+        value: true,
+    },
+})
 
 Object.assign(
     XSprite.prototype,
@@ -43,7 +54,7 @@ Object.assign(
         var uvB = new Vector2()
         var uvC = new Vector2()
 
-        function transformVertex(vertexPosition, mvPosition, center, scale, sin, cos) {
+        function transformVertex(vertexPosition, mvPosition, center, scale, sin, cos, updateBound) {
             // compute position in camera space
             alignedPosition
                 .subVectors(vertexPosition, center)
@@ -59,18 +70,20 @@ Object.assign(
             vertexPosition.copy(mvPosition)
             vertexPosition.x += rotatedPosition.x
             vertexPosition.y += rotatedPosition.y
+
+            !updateBound && vertexPosition.applyMatrix4(viewWorldMatrix)
         }
 
         return {
-            updateBound: function box(map) {
+            updateBound: function box(renderer, scene, camera) {
                 worldScale.set(this.width, this.height, 1)
                 viewWorldMatrix.getInverse(this.modelViewMatrix).premultiply(this.matrixWorld)
                 mvPosition.setFromMatrixPosition(this.modelViewMatrix)
 
                 mvPosition.applyMatrix4(viewWorldMatrix)
-                mvPosition.project(map._camera)
+                mvPosition.project(camera)
 
-                vpPosition.copy(mvPosition).applyMatrix4(map.viewportMatrix)
+                vpPosition.copy(mvPosition).applyMatrix4(renderer.viewportMatrix)
                 if (!this.material) return
                 var rotation = this.material.rotation
                 var sin, cos
@@ -81,9 +94,9 @@ Object.assign(
 
                 var center = this.center
 
-                transformVertex(vA.set(-0.5, -0.5, 0), vpPosition, center, worldScale, sin, cos)
-                transformVertex(vB.set(0.5, -0.5, 0), vpPosition, center, worldScale, sin, cos)
-                transformVertex(vC.set(0.5, 0.5, 0), vpPosition, center, worldScale, sin, cos)
+                transformVertex(vA.set(-0.5, -0.5, 0), vpPosition, center, worldScale, sin, cos, true)
+                transformVertex(vB.set(0.5, -0.5, 0), vpPosition, center, worldScale, sin, cos, true)
+                transformVertex(vC.set(0.5, 0.5, 0), vpPosition, center, worldScale, sin, cos, true)
 
                 this.boundBox.setFromPoints([vA, vB, vC])
             },
@@ -128,9 +141,7 @@ Object.assign(
                 }
 
                 var distance = raycaster.ray.origin.distanceTo(intersectPoint)
-
                 if (distance < raycaster.near || distance > raycaster.far) return
-
                 intersects.push({
                     distance: distance,
                     point: intersectPoint.clone(),

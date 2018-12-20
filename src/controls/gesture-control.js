@@ -1,5 +1,6 @@
 import { addEvent, removeEvent } from '../utils/event'
-import { Vector2, Vector3, Matrix4, Plane, Raycaster, EventDispatcher } from '../libs/threejs/three.module'
+import { Vector2, Vector3, Plane, EventDispatcher } from '../libs/threejs/three.module'
+import { getCameraRaycast } from '../core/view'
 
 const STATE = {
     NONE: -1,
@@ -72,8 +73,6 @@ class GestureControl {
         this.deltaVector = new Vector2()
         this.touchStartPoints = [new Vector2(), new Vector2(), new Vector2()]
         this.touchEndPoints = [new Vector2(), new Vector2(), new Vector2()]
-
-        this.cameraInverseMatrix = new Matrix4()
 
         this.phiDelta = 0
         this.thetaDelta = 0
@@ -250,14 +249,10 @@ class GestureControl {
 Object.assign(GestureControl.prototype, Object.create(EventDispatcher.prototype))
 Object.assign(GestureControl.prototype, {
     viewToWorld: (function() {
-        const raycaster = new Raycaster()
-        const vector = new Vector3(0, 0, 0.5)
         const plane = new Plane(new Vector3(0, 1, 0), 0)
 
         return function(point) {
-            vector.x = (point.x / this.wrapper.clientWidth) * 2 - 1
-            vector.y = -(point.y / this.wrapper.clientHeight) * 2 + 1
-            raycaster.setFromCamera(vector, this.camera)
+            let raycaster = getCameraRaycast(this.$map, point)
             let result = new Vector3()
             raycaster.ray.intersectPlane(plane, result)
             return result

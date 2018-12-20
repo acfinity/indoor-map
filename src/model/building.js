@@ -1,12 +1,13 @@
-import { Vector3, Group } from '../libs/threejs/three.module'
+import { Vector3, Mesh, Shape, ExtrudeBufferGeometry } from '../libs/threejs/three.module'
 import { mixinMapObject } from './map-object'
 import Floor from './floor'
 import TWEEN from '../libs/Tween'
 import { ViewMode } from '../constants'
+import { parsePoints } from '../utils/view'
 
 const FLOOR_SPACE = 600
 
-class Building extends Group {
+class Building extends Mesh {
     constructor(attr = {}) {
         super()
         let {
@@ -35,10 +36,6 @@ class Building extends Group {
         this.initObject3D()
 
         this.showFloor(defaultFloor)
-
-        this.onViewModeChange = () => {
-            this.showAllFloors()
-        }
     }
 
     initObject3D() {
@@ -50,27 +47,44 @@ class Building extends Group {
             object.sprites.push(...floor.sprites)
             floor.position.setZ(index * FLOOR_SPACE)
         })
+        let extrudeSettings = {
+            depth: this.floors.length * FLOOR_SPACE,
+            bevelEnabled: false,
+        }
+        let shape = new Shape(parsePoints(this.info.outline[0][0]))
+        let geometry3d = new ExtrudeBufferGeometry(shape, extrudeSettings)
+        this.geometry = geometry3d
+        this.material.transparent = true
+        this.material.opacity = 0
+        this.material.alphaTest = 0.1
 
         this.showAllFloors()
 
         object.rotateOnAxis(new Vector3(1, 0, 0), -Math.PI / 2)
     }
 
-    updateBound(map) {
+    onViewModeChange() {
+        this.showAllFloors()
+    }
+
+    onThemeChange() {}
+
+    onBeforeRender(renderer, scene, camera) {
+        if (!this.boundNeedsUpdate) return
         this.floors
             .filter(it => it.visible)
             .forEach(floor => {
                 for (let i in floor.sprites) {
                     const sprite1 = floor.sprites[i]
-                    if (!map.showNames && !sprite1.isPubPoint) {
+                    if (!this.$map.showNames && !sprite1.isPubPoint) {
                         sprite1.visible = false
                         continue
                     }
-                    if (!map.showPubPoints && sprite1.isPubPoint) {
+                    if (!this.$map.showPubPoints && sprite1.isPubPoint) {
                         sprite1.visible = false
                         continue
                     }
-                    sprite1.updateBound(map)
+                    sprite1.updateBound(renderer, scene, camera)
                     sprite1.visible = true
                     for (let j = 0; j < i; j++) {
                         const sprite2 = floor.sprites[j]
@@ -81,6 +95,7 @@ class Building extends Group {
                     }
                 }
             })
+        this.boundNeedsUpdate = false
     }
 
     showFloor(floorNum) {
@@ -102,7 +117,7 @@ class Building extends Group {
         let index = this.children.filter(obj => obj.isFloor).findIndex(it => it === target)
         new TWEEN.Tween(this.position)
             .to({ y: -index * FLOOR_SPACE }, current != null ? 150 : 0)
-            .onComplete(() => this.updateBound(this.$map))
+            .onComplete(() => (this.boundNeedsUpdate = true))
             .start()
     }
 
@@ -127,9 +142,14 @@ class Building extends Group {
     }
 }
 
-mixinMapObject(Building, 'Building')
+mixinMapObject(Building)
 
 Object.defineProperties(Building.prototype, {
+    isBuilding: {
+        configurable: false,
+        writable: false,
+        value: true,
+    },
     floorNames: {
         get: function() {
             return this.floors ? this.floors.map(it => it.name) : []

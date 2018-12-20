@@ -1,5 +1,6 @@
 import MapLoader from '../loaders/map-loader'
 import themeLoader from '../loaders/theme-loader'
+import { clearRenderer, loadModel } from './view'
 
 function changeTheme(mo, theme) {
     function changeTheme(object) {
@@ -11,21 +12,14 @@ function changeTheme(mo, theme) {
     let { background = '#f9f9f9' } = theme
     if (typeof background === 'object') {
         let { color, alpha = 1 } = background
-        mo.renderer.setClearColor(color, alpha)
+        clearRenderer(mo, color, alpha)
     } else {
         if (typeof background !== 'string') {
             background = '#f9f9f9'
         }
-        mo.renderer.setClearColor(background, 1)
+        clearRenderer(mo, background, 1)
     }
     mo.building && changeTheme(mo.building)
-}
-
-function injectMapInstance(mo, object) {
-    if (object.isMapObject) {
-        object.$map = mo
-    }
-    object.children.forEach(obj => injectMapInstance(mo, obj))
 }
 
 export function loaderMixin(XMap) {
@@ -36,18 +30,13 @@ export function loaderMixin(XMap) {
                 this.mapLoader
                     .load(fileName)
                     .then(building => {
-                        this.building = building
+                        loadModel(this, building)
                         changeTheme(this, this.themeLoader.getTheme(this._currentTheme))
-                        injectMapInstance(this, this.building)
-
-                        this._scene.add(building)
 
                         building.showFloor('F1')
 
                         this._overlays.forEach(overlay => this._addOverlay(overlay))
-                        
-                        this.renderer.domElement.style.opacity = 1
-                        
+
                         this.dispatchEvent({ type: 'mapLoaded' })
                         resolve(this)
                     })

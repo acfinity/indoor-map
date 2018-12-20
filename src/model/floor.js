@@ -78,6 +78,14 @@ class Floor extends Mesh {
     }
 }
 
-mixinMapObject(Floor, 'Floor')
+mixinMapObject(Floor)
+
+Object.defineProperties(Floor.prototype, {
+    isFloor: {
+        configurable: false,
+        writable: false,
+        value: true,
+    },
+})
 
 export default Floor

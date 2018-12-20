@@ -14,7 +14,7 @@ class SpriteCanvasMaterial extends SpriteMaterial {
         super({
             sizeAttenuation: false,
             transparent: true,
-            depthWrite: false,
+            alphaTest: 0.1,
             ...options,
             map: texture,
         })

@@ -1,14 +1,13 @@
 import GestureControl from '../controls/gesture-control'
 import FloorControl from '../controls/floor-control'
-import { initView } from './view'
+import { initView, startRenderer } from './view'
 import { initEvent } from './event'
 import { initLoaders } from './loader'
-import { startRenderer } from './render'
 import { initState } from './state'
 
 export function initMixin(XMap) {
     Object.assign(XMap.prototype, {
-        _init(el, options) {
+        _init_(el, options) {
             this.options = options
             this.$wrapper = typeof el == 'string' ? document.querySelector(el) : el
             this.$wrapper.style.overflow = 'hidden'
@@ -19,8 +18,20 @@ export function initMixin(XMap) {
             initView(this)
             initState(this)
 
-            this.gestureControl = new GestureControl(this)
-            new FloorControl(this)
+            Object.defineProperties(this, {
+                gestureControl: {
+                    configurable:false,
+                    writable: false,
+                    enumerable: false,
+                    value: new GestureControl(this)
+                },
+                floorControl: {
+                    configurable:false,
+                    writable: false,
+                    enumerable: false,
+                    value: new FloorControl(this)
+                }
+            })
 
             initEvent(this)
 
