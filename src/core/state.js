@@ -3,14 +3,22 @@ import { ViewMode } from '../constants'
 import TWEEN from '../libs/Tween'
 
 const __mapState__ = new WeakMap()
-// const __animateTargetState__ = new WeakMap()
+const __mapStateReset__ = new WeakMap()
 const __animationList__ = new WeakMap()
 
 const EPS = 1e-7
 const ANIMATE_DURATION = 150
 
 export function initState(mo) {
-    let { rotateAngle = 0, tiltAngle = 60, maxTiltAngle = 75, minTiltAngle = 0 } = mo.options
+    let {
+        rotateAngle = 0,
+        tiltAngle = 60,
+        maxTiltAngle = 75,
+        minTiltAngle = 0,
+        showAllFloors = false,
+        showNames = true,
+        showPubPoints = true,
+    } = mo.options
     let state = {
         rotateAngle: rotateAngle,
         tiltAngle: tiltAngle,
@@ -20,16 +28,24 @@ export function initState(mo) {
         scale: 1,
         height: 5000,
         viewMode: mo.options.viewMode || ViewMode.MODE_3D,
-        showAllFloors: false,
+        showAllFloors: !!showAllFloors,
+        showNames: !!showNames,
+        showPubPoints: !!showPubPoints,
+    }
+    let resetState = {
+        ...state,
+        center: new Vector3(0, 0, 0),
     }
     let tilt = Math.min(state.maxTiltAngle, Math.max(state.tiltAngle, state.minTiltAngle))
     tilt = Math.max(EPS, Math.min(90 - EPS, tilt))
     state.tiltAngle = tilt
     __mapState__.set(mo, state)
+    __mapStateReset__.set(mo, resetState)
     __animationList__.set(mo, new Set())
 
     mo.on('mapLoaded', () => {
         mo.setShowAllFloors(state.showAllFloors)
+        changeViewMode(mo, state.viewMode === ViewMode.MODE_3D)
         state.needsUpdate = true
     })
 }
@@ -47,12 +63,13 @@ function changeViewMode(mo, is3dMode) {
 export function stateMixin(XMap) {
     Object.assign(XMap.prototype, {
         reset() {
-            let camAngle = Math.PI / 2
-            let camDir = [Math.cos(camAngle), Math.sin(camAngle)]
-            let camLen = 5000
-            let tiltAngle = (75.0 * Math.PI) / 180.0
-            this._camera.position.set(-camDir[1] * camLen, Math.sin(tiltAngle) * camLen, camDir[0] * camLen)
-            this._camera.lookAt(this._scene.position)
+            let state = __mapState__.get(this)
+            let resetState = __mapStateReset__.get(this)
+            Object.entries(resetState).forEach(([k, v]) => (state[k] = v))
+
+            __mapState__.get(this).needsUpdate = true
+
+            this.dispatchEvent({ type: 'stateChanged' })
         },
 
         setViewMode(mode) {
@@ -124,8 +141,8 @@ export function stateMixin(XMap) {
         },
 
         setShowAllFloors(showAll = true) {
-            this.building.showAllFloors(showAll)
             __mapState__.get(this).showAllFloors = !!showAll
+            this.building.showAllFloors(showAll)
             __mapState__.get(this).needsUpdate = true
 
             this.dispatchEvent({ type: 'stateChanged' })
@@ -143,10 +160,10 @@ export function stateMixin(XMap) {
 
         _update_: (function() {
             let offsetVector = new Vector3()
-            return function() {
+            return function(scene, camera) {
                 let state = __mapState__.get(this)
                 state.needsUpdate = false
-                let position = this._camera.position
+                let position = camera.position
 
                 let rotate = state.rotateAngle - 90
                 let tilt = EPS
@@ -164,7 +181,7 @@ export function stateMixin(XMap) {
                 offsetVector.z = radius * Math.sin(tilt) * Math.cos(rotate)
 
                 position.copy(center).add(offsetVector)
-                this._camera.lookAt(center)
+                camera.lookAt(center)
             }
         })(),
     })
@@ -209,6 +226,24 @@ export function stateMixin(XMap) {
             },
             set: function(value) {
                 this.setShowAllFloors(value)
+            },
+        },
+        showNames: {
+            get: function() {
+                return __mapState__.get(this).showNames
+            },
+            set: function(value) {
+                __mapState__.get(this).showNames = !!value
+                __mapState__.get(this).needsUpdate = true
+            },
+        },
+        showPubPoints: {
+            get: function() {
+                return __mapState__.get(this).showPubPoints
+            },
+            set: function(value) {
+                __mapState__.get(this).showPubPoints = !!value
+                __mapState__.get(this).needsUpdate = true
             },
         },
     })

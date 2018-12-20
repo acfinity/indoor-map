@@ -4,16 +4,21 @@ const __needsUpdate__ = new Map()
 const canvasScale = 2
 
 class SpriteCanvasMaterial extends SpriteMaterial {
-    constructor({ measure, compile }) {
+    constructor(options) {
         let canvas = document.createElement('canvas')
         let texture = new Texture(canvas)
         texture.minFilter = LinearFilter
+        let { measure, compile } = options
+        delete options.measure
+        delete options.compile
         super({
-            map: texture,
             sizeAttenuation: false,
             transparent: true,
-            alphaTest: 0.1,
+            depthWrite: false,
+            ...options,
+            map: texture,
         })
+
         this.measure = measure
         this.compile = compile
 

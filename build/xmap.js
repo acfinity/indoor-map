@@ -1,8 +1,8 @@
 (function (global, factory) {
-	typeof exports === 'object' && typeof module !== 'undefined' ? module.exports = factory() :
-	typeof define === 'function' && define.amd ? define(factory) :
-	(global.XMap = factory());
-}(this, (function () { 'use strict';
+	typeof exports === 'object' && typeof module !== 'undefined' ? factory(exports) :
+	typeof define === 'function' && define.amd ? define(['exports'], factory) :
+	(factory((global.XMap = {})));
+}(this, (function (exports) { 'use strict';
 
 	function overlayMixin(XMap) {
 	    Object.assign(XMap.prototype, {
@@ -47152,11 +47152,6 @@
 	    Max: 1,
 	};
 
-	var Constants = /*#__PURE__*/Object.freeze({
-		ViewMode: ViewMode,
-		Scale: Scale
-	});
-
 	class FloorControl extends BaseControl {
 	    constructor(mm) {
 	        super(mm);
@@ -47412,6 +47407,8 @@
 	    addEvent(window, 'resize', () => refreshSize());
 	}
 
+	const __preHover__ = new WeakMap();
+
 	function eventMixin(Class) {
 	    Object.assign(Class.prototype, EventDispatcher.prototype);
 	    const eventMap = new Map();
@@ -47452,7 +47449,6 @@
 	    const raycaster = new Raycaster();
 	    const mouse = new Vector2();
 	    const vector = new Vector3(mouse.x, mouse.y, 0.5);
-	    // let preHoveredEntity = undefined
 	    const intersectObjects = function(eventType, mo, e) {
 	        if (!mo.building) {
 	            return
@@ -47479,15 +47475,12 @@
 	            if (!intersects || intersects.length === 0) {
 	                return
 	            }
-	            let overlay;
-	            if (intersects[0].object.handler && intersects[0].object.handler.isOverlay) {
-	                overlay = intersects[0].object.handler;
-	                intersects[0].object.handler.dispatchEvent({ type: 'click', message: { overlay, domEvent: e } });
+	            let overlay,
+	                fo = intersects.filter(it => it.object.isFloor || (it.object.handler && it.object.handler.isOverlay));
+	            if (fo[0] && fo[0].object.handler && fo[0].object.handler.isOverlay) {
+	                overlay = fo[0].object.handler;
+	                fo[0].object.handler.dispatchEvent({ type: 'click', message: { overlay, domEvent: e } });
 	            }
-	            intersects
-	                .filter(it => it.object.isRoom)
-	                .splice(0, 1)
-	                .forEach(it => it.object.dispatchEvent({ type: 'click' }));
 	            if (mo.hasEventListener('click')) {
 	                let floor = intersects.filter(it => it.object.isFloor)[0];
 	                if (floor) {
@@ -47509,24 +47502,31 @@
 	            if (!intersects || intersects.length === 0) {
 	                return
 	            }
-	            // let hoveredEntity = null
-	            // if (intersects[0].object.handler && intersects[0].object.handler.isOverlay) {
-	            //     intersects[0].object.handler.dispatchEvent('click', { domEvent: e })
-	            //     // overlay = intersects[0].object.handler
-	            // }
-	            // if (hoveredEntity && hoveredEntity.object === preHoveredEntity) {
-	            //     return
-	            // } else {
-	            //     if (this._hoveredEntity != null) {
-	            //         this._hoveredEntity.handler.onHover && preHoveredEntity.handler.onHover(false)
-	            //     }
-	            //     if (hoveredEntity != null) {
-	            //         this._hoveredEntity = hoveredEntity.object
-	            //         this._hoveredEntity.handler.onHover && preHoveredEntity.handler.onHover(true)
-	            //     } else {
-	            //         this._hoveredEntity = null
-	            //     }
-	            // }
+	            let overlay,
+	                preHover = __preHover__.get(this),
+	                fo = intersects.filter(it => it.object.isFloor || (it.object.handler && it.object.handler.isOverlay));
+	            if (fo[0] && fo[0].object.handler && fo[0].object.handler.isOverlay) {
+	                overlay = fo[0].object.handler;
+	            }
+	            if (preHover != overlay) {
+	                overlay && overlay.dispatchEvent({ type: 'hover', message: { overlay, domEvent: e, hovered: true } });
+	                preHover && preHover.dispatchEvent({ type: 'hover', message: { overlay, domEvent: e, hovered: false } });
+	            }
+	            if (mo.hasEventListener('hover')) {
+	                let floor = intersects.filter(it => it.object.isFloor)[0];
+	                if (floor) {
+	                    mo.dispatchEvent({
+	                        type: 'hover',
+	                        message: {
+	                            x: Math.round(floor.point.x),
+	                            y: -Math.round(floor.point.z),
+	                            floor: floor.object.handler.name,
+	                            overlay,
+	                            domEvent: e,
+	                        },
+	                    });
+	                }
+	            }
 	        };
 	    }
 	})();
@@ -49367,7 +49367,7 @@
 	        scale: 1,
 	        height: 5000,
 	        viewMode: mo.options.viewMode || ViewMode.MODE_3D,
-	        showAllFloors: true,
+	        showAllFloors: false,
 	    };
 	    let tilt = Math.min(state.maxTiltAngle, Math.max(state.tiltAngle, state.minTiltAngle));
 	    tilt = Math.max(EPS, Math.min(90 - EPS, tilt));
@@ -49375,7 +49375,10 @@
 	    __mapState__.set(mo, state);
 	    __animationList__.set(mo, new Set());
 
-	    mo.on('mapLoaded', () => (state.needsUpdate = true));
+	    mo.on('mapLoaded', () => {
+	        mo.setShowAllFloors(state.showAllFloors);
+	        state.needsUpdate = true;
+	    });
 	}
 
 	function changeViewMode(mo, is3dMode) {
@@ -49578,8 +49581,6 @@
 
 	            initLoaders(this);
 	            startRenderer(this);
-
-	            window.map = this;
 	        },
 	    });
 	    Object.defineProperties(XMap.prototype, {
@@ -49643,17 +49644,67 @@
 	    }
 	}
 
-	class Size {
-	    constructor(width, height = width) {
-	        this.width = width;
-	        this.height = height;
+	class Point {
+	    constructor(x, y = x) {
+	        this.x = x;
+	        this.y = y;
+	    }
+
+	    setX(x) {
+	        this.x = x;
+	        return this
+	    }
+
+	    setY(y) {
+	        this.y = y;
+	        return this
+	    }
+
+	    setWidth(value) {
+	        return this.setX(value)
+	    }
+
+	    setHeight(value) {
+	        return this.setY(value)
+	    }
+
+	    floor() {
+	        this.x = Math.floor(this.x);
+	        this.y = Math.floor(this.y);
+
+	        return this
+	    }
+
+	    ceil() {
+	        this.x = Math.ceil(this.x);
+	        this.y = Math.ceil(this.y);
+
+	        return this
+	    }
+
+	    round() {
+	        this.x = Math.round(this.x);
+	        this.y = Math.round(this.y);
+
+	        return this
+	    }
+
+	    set width(value) {
+	        this.x = value;
+	    }
+
+	    get width() {
+	        return this.x
+	    }
+
+	    set height(value) {
+	        this.y = value;
+	    }
+
+	    get height() {
+	        return this.y
 	    }
 	}
-
-	var Models = {
-	    Location,
-	    Size,
-	};
 
 	class Overlay {
 	    constructor() {}
@@ -49719,13 +49770,15 @@
 	    },
 	});
 
-	const PUB_POINT_SIZE$1 = new Vector2(20, 20);
+	const MARKER_SIZE = new Vector2(20, 20);
+	const __options__$1 = new WeakMap();
 
 	class Marker extends Overlay {
 	    constructor(location, options = {}) {
 	        super();
+	        __options__$1.set(this, {});
+	        this.setOptions(options);
 
-	        this.options = options;
 	        this.currentLocation = location;
 	        this.location = location;
 	        this.floor = location.floor;
@@ -49734,44 +49787,57 @@
 	        this.initObject3D();
 	    }
 
-	    initObject3D() {
-	        let { icon } = this.options;
+	    setOptions({ icon, size, offset }) {
+	        if (typeof icon !== 'undefined') __options__$1.get(this).icon = icon;
+	        if (typeof size !== 'undefined') __options__$1.get(this).size = size;
+	        if (typeof offset !== 'undefined') __options__$1.get(this).offset = offset;
+	        if (this.object3D && icon) {
+	            new TextureLoader().load(icon, t => {
+	                t.needsUpdate = true;
+	                t.minFilter = LinearFilter;
+	                this.object3D.material.map = t;
+	            });
+	        }
+	        if (this.object3D && offset) {
+	            this.object3D.center.set(0.5 - offset.x / this.object3D.width, 0.5 + offset.y / this.object3D.height);
+	        }
+	    }
 
-	        this.texture = new TextureLoader().load(icon, t => {
+	    initObject3D() {
+	        let { icon, size, offset } = __options__$1.get(this);
+	        size = size || MARKER_SIZE;
+	        size.ceil();
+	        let texture = new TextureLoader().load(icon, t => {
 	            t.needsUpdate = true;
 	        });
-	        this.texture.minFilter = LinearFilter;
-	        this.material = new SpriteMaterial({
-	            map: this.texture,
+	        texture.minFilter = LinearFilter;
+	        let material = new SpriteMaterial({
+	            map: texture,
 	            sizeAttenuation: false,
 	            transparent: true,
 	            alphaTest: 0.1,
-	            // depthTest: false,
+	            depthTest: false,
 	        });
 
-	        let sprite = new Sprite(this.material);
-	        let size = PUB_POINT_SIZE$1;
-	        if (typeof this.options.size === 'number' || typeof this.options.size === 'string') {
-	            size = Number(this.options.size);
-	            size = new Vector2(size, size);
-	        } else if (this.options.size && this.options.size.width > 0) {
-	            size = this.options.size;
-	        }
-	        let align = this.options.align || 'CENTER';
+	        let sprite = new Sprite(material);
 	        sprite.width = size.width;
 	        sprite.height = size.height;
 	        sprite.position.copy(this.position);
 	        sprite.handler = this;
 	        sprite.type = 'Marker';
-	        if (align === 'CENTER') {
+	        if (offset) {
+	            sprite.center.set(0.5 - offset.x / size.width, 0.5 + offset.y / size.height);
+	        } else {
 	            sprite.center.set(0.5, 0.5);
-	        } else if (align === 'BOTTOM') {
-	            sprite.center.set(0.5, 0);
 	        }
 	        sprite.renderOrder = 10;
 	        sprite.onViewModeChange = is3dMode => sprite.position.setZ(is3dMode ? this.currentLocation.z : 4);
 	        this.object3D = sprite;
 	        return sprite
+	    }
+
+	    get isMarker() {
+	        return true
 	    }
 	}
 
@@ -49795,27 +49861,18 @@
 	    }
 	}
 
-	var Overlays = {
-	    Overlay,
-	    HTMLOverlay,
-	    Marker,
-	    HTMLInfoWindow,
-	};
-
 	// import Label from './label'
 
-	var Objects = {
-	    // Label,
-	};
+	exports.Map = XMap;
+	exports.ViewMode = ViewMode;
+	exports.Scale = Scale;
+	exports.Location = Location;
+	exports.Point = Point;
+	exports.Overlay = Overlay;
+	exports.HTMLOverlay = HTMLOverlay;
+	exports.Marker = Marker;
+	exports.HTMLInfoWindow = HTMLInfoWindow;
 
-	var index = {
-	    Map: XMap,
-	    ...Constants,
-	    ...Models,
-	    ...Overlays,
-	    ...Objects
-	};
-
-	return index;
+	Object.defineProperty(exports, '__esModule', { value: true });
 
 })));

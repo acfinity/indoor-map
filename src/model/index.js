@@ -1,7 +1,4 @@
 import Location from './location'
-import Size from './size'
+import Point from './point'
 
-export default {
-    Location,
-    Size,
-}
+export { Location, Point }

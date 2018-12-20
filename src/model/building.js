@@ -62,6 +62,14 @@ class Building extends Group {
             .forEach(floor => {
                 for (let i in floor.sprites) {
                     const sprite1 = floor.sprites[i]
+                    if (!map.showNames && !sprite1.isPubPoint) {
+                        sprite1.visible = false
+                        continue
+                    }
+                    if (!map.showPubPoints && sprite1.isPubPoint) {
+                        sprite1.visible = false
+                        continue
+                    }
                     sprite1.updateBound(map)
                     sprite1.visible = true
                     for (let j = 0; j < i; j++) {
@@ -98,10 +106,10 @@ class Building extends Group {
             .start()
     }
 
-    showAllFloors(showAll = this._shouldShowAll_()) {
+    showAllFloors() {
         this.children.forEach(obj => {
             if (obj.isFloor) {
-                obj.visible = showAll || obj === this.getFloor(this.currentFloorNum)
+                obj.visible = this._shouldShowAll_() || obj === this.getFloor(this.currentFloorNum)
             }
         })
     }

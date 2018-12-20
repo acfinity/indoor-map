@@ -13,7 +13,6 @@ class FloorControl extends BaseControl {
 
     _init_() {
         let mm = this.$map
-        this.camera = mm._camera
         this.$el = document.createElement('ul')
         this.$el.classList = ['xmap-floor-control']
         this.$el.style.display = 'none'

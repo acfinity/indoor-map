@@ -1,5 +1,5 @@
 // import Label from './label'
 
-export default {
+export {
     // Label,
 }

@@ -38,7 +38,7 @@ export function renderMixin(XMap) {
             TWEEN.update()
 
             if (this.needsUpdate) {
-                this._update_()
+                this._update_(this._scene, this._camera)
                 this._camera.updateProjectionMatrix()
                 this.updateProjectionMatrix = true
                 updateModels(this)

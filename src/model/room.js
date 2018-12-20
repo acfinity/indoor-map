@@ -13,10 +13,10 @@ import {
     LineBasicMaterial,
     MeshPhongMaterial,
     MeshLambertMaterial,
-    TextureLoader,
+    // TextureLoader,
     DoubleSide,
-    LinearFilter,
-    RepeatWrapping,
+    // LinearFilter,
+    // RepeatWrapping,
 } from '../libs/threejs/three.module'
 import { mixinMapObject } from './map-object'
 import { parsePoints } from '../utils/view'
@@ -37,7 +37,7 @@ class Room extends Mesh {
         let points = parsePoints(this.info.outline[0][0])
         let shape = new Shape(points)
 
-        let geometry, mesh
+        let geometry
 
         let extrudeSettings = {
             depth: this.floor.info.height,
@@ -47,7 +47,7 @@ class Room extends Mesh {
         let geometry2d = new ShapeGeometry(shape)
         this.geometry = geometry3d
         this.material = new MeshLambertMaterial()
-        this.material.alphaTest = 0.1
+        this.material.depthWrite = false
         let object = this
         object.onViewModeChange = is3dMode => {
             object.geometry = is3dMode ? geometry3d : geometry2d
@@ -59,21 +59,22 @@ class Room extends Mesh {
 
         if (this.info.walls) {
             object.material.opacity = 0
-            geometry = new ShapeGeometry(shape)
-            let groundMaterial = new MeshPhongMaterial()
-            let textureLoader = new TextureLoader()
-            textureLoader.load('./textures/floor-board.jpg', function(texture) {
-                texture.minFilter = LinearFilter
-                texture.wrapS = RepeatWrapping
-                texture.wrapT = RepeatWrapping
-                texture.anisotropy = 16
-                texture.repeat.set(0.01, 0.01)
-                groundMaterial.map = texture
-                groundMaterial.needsUpdate = true
-            })
-            mesh = new Mesh(geometry, groundMaterial)
-            mesh.position.set(0, 0, 1)
-            object.add(mesh)
+            this.material.alphaTest = 0.1
+            // geometry = new ShapeGeometry(shape)
+            // let groundMaterial = new MeshPhongMaterial()
+            // let textureLoader = new TextureLoader()
+            // textureLoader.load('./textures/floor-board.jpg', function(texture) {
+            //     texture.minFilter = LinearFilter
+            //     texture.wrapS = RepeatWrapping
+            //     texture.wrapT = RepeatWrapping
+            //     texture.anisotropy = 16
+            //     texture.repeat.set(0.01, 0.01)
+            //     groundMaterial.needsUpdate = true
+            //     groundMaterial.map = texture
+            // })
+            // mesh = new Mesh(geometry, groundMaterial)
+            // mesh.position.set(0, 0, 1)
+            // object.add(mesh)
             let material = new MeshPhongMaterial({
                 color: 0x156289,
                 emissive: 0x072534,
@@ -81,7 +82,7 @@ class Room extends Mesh {
                 flatShading: true,
                 opacity: 0.5,
                 transparent: true,
-                alphaTest: 0.1,
+                depthWrite: false,
             })
             this.info.walls.forEach(wall => {
                 let points = parsePoints(wall)
@@ -104,7 +105,7 @@ class Room extends Mesh {
             geometry = new Geometry().setFromPoints(points)
             let wire = new LineLoop(geometry)
             wire.material = new LineBasicMaterial()
-            wire.material.alphaTest = 0.1
+            wire.material.depthWrite = false
             wire.position.set(0, 0, this.floor.info.height)
             wire.onViewModeChange = is3dMode => wire.position.setZ(is3dMode ? this.floor.info.height : 2)
             object.add(wire)
@@ -113,7 +114,7 @@ class Room extends Mesh {
                 let roomStyle = theme.roomStyle[this.info.category] || theme.roomStyle['default']
                 this.material.setValues(roomStyle)
                 wire.material.setValues(roomStyle)
-                wire.material.color.multiplyScalar(0.5)
+                wire.material.color.multiplyScalar(0.8)
             }
         }
         if (this.info.pillars) {
@@ -155,6 +156,7 @@ class Room extends Mesh {
             let center = object.box.getCenter(new Vector2())
             sprite.position.set(center.x, center.y, this.floor.info.height + 5)
             sprite.center.set(0.5, 0)
+            sprite.renderOrder = 1
             sprite.onViewModeChange = is3dMode => sprite.position.setZ(is3dMode ? this.floor.info.height + 5 : 3)
             object.add(sprite)
         }

@@ -14,7 +14,11 @@ const PERSPECTIVE_FOV = 20
 
 export function viewMixin(XMap) {
     Object.assign(XMap.prototype, {
-        setDefaultView() {
+        clear() {
+            this.building && this._scene.remove(this.building)
+            this.building = null
+            this.clearOverlays()
+            this.renderer.clear()
         },
 
         locationToViewport: (function() {
@@ -76,10 +80,10 @@ function initDom(mo) {
 function initThree(mo) {
     let width = mo.$wrapper.clientWidth,
         height = mo.$wrapper.clientHeight
-    mo._canvasScale = Math.round(height / Math.sin((PERSPECTIVE_FOV / 180) * Math.PI))
 
     mo._scene = new Scene()
     mo._camera = new PerspectiveCamera(PERSPECTIVE_FOV, width / height, 140, 100000)
+    mo._camera.spriteScale = 1 / (height / 2 / Math.tan((mo._camera.fov / 2 / 180) * Math.PI))
 
     //set up the lights
     let light = new AmbientLight(0x747474)
@@ -96,7 +100,7 @@ function initThree(mo) {
 
     mo.renderer = new WebGLRenderer({
         antialias: true,
-        alpha: true
+        alpha: true,
     })
     mo.renderer.autoClear = false
     mo.renderer.setClearColor('#ffffff')
@@ -119,11 +123,12 @@ export function initView(mo) {
     function refreshSize() {
         let width = mo.$wrapper.clientWidth,
             height = mo.$wrapper.clientHeight
-        mo._canvasScale = Math.round(height / Math.sin((PERSPECTIVE_FOV / 180) * Math.PI))
+        mo._camera.spriteScale = 1 / (height / 2 / Math.tan((mo._camera.fov / 2 / 180) * Math.PI))
 
         mo._camera.aspect = width / height
         mo._camera.updateProjectionMatrix()
 
+        mo.renderer.setPixelRatio(window.devicePixelRatio)
         mo.renderer.setSize(width, height)
         let hw = width / 2,
             hh = height / 2

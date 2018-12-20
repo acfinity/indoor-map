@@ -1,9 +1,10 @@
-import { Vector2, Box2, Sprite } from '../libs/threejs/three.module'
+import { Vector2 } from '../libs/threejs/three.module'
 import { mixinMapObject } from './map-object'
+import XSprite from '../objects/XSprite'
 
 export const PUB_POINT_SIZE = new Vector2(24, 24)
 
-class PubPoint extends Sprite {
+class PubPoint extends XSprite {
     constructor(attr, floor) {
         super()
         this.info = attr
@@ -11,7 +12,6 @@ class PubPoint extends Sprite {
         this.name = name
         this.floor = floor
         this.center = new Vector2(this.info.outline[0][0][0], this.info.outline[0][0][1])
-        this.boundBox = new Box2()
 
         this.initObject3D()
     }
@@ -25,12 +25,11 @@ class PubPoint extends Sprite {
         }
         sprite.width = PUB_POINT_SIZE.width
         sprite.height = PUB_POINT_SIZE.height
-        sprite.scale.set(PUB_POINT_SIZE.width / this.canvasScale, PUB_POINT_SIZE.height / this.canvasScale, 1)
         this.scale.copy(sprite.scale)
         this.position.copy(this.center).setZ(this.floor.info.height + 5)
         sprite.handler = this
         sprite.center.set(0.5, 0)
-        sprite.boundBox = new Box2()
+        sprite.renderOrder = 1
         sprite.onViewModeChange = is3dMode => sprite.position.setZ(is3dMode ? this.floor.info.height + 5 : 3)
     }
 }

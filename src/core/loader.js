@@ -24,7 +24,6 @@ function changeTheme(mo, theme) {
 function injectMapInstance(mo, object) {
     if (object.isMapObject) {
         object.$map = mo
-        if (object.updateScale) object.updateScale()
     }
     object.children.forEach(obj => injectMapInstance(mo, obj))
 }
@@ -33,10 +32,7 @@ export function loaderMixin(XMap) {
     Object.assign(XMap.prototype, {
         load(fileName) {
             return new Promise((resolve, reject) => {
-                if (this.building) {
-                    this._scene.remove(this.building)
-                    this.building = undefined
-                }
+                this.clear()
                 this.mapLoader
                     .load(fileName)
                     .then(building => {
@@ -48,14 +44,11 @@ export function loaderMixin(XMap) {
 
                         building.showFloor('F1')
 
-                        this.dispatchEvent({ type: 'mapLoaded' })
                         this._overlays.forEach(overlay => this._addOverlay(overlay))
-
-                        this.setDefaultView()
-
+                        
                         this.renderer.domElement.style.opacity = 1
-                        this.building.updateBound(this)
-                        this.setViewMode(this.options.viewMode)
+                        
+                        this.dispatchEvent({ type: 'mapLoaded' })
                         resolve(this)
                     })
                     .catch(e => reject(e))

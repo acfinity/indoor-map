@@ -1,15 +1,16 @@
-import { Vector2, Vector3, Vector4, Matrix4, Box2, Sprite } from '../libs/threejs/three.module'
+import { Vector2 } from '../libs/threejs/three.module'
 import SpriteCanvasMaterial from '../libs/threejs/materials/SpriteCanvasMaterial'
 import { mixinMapObject } from './map-object'
+import XSprite from '../objects/XSprite'
 
 const defaultIconSize = new Vector2(15, 15)
 const __needsUpdate__ = new WeakMap()
 const __options__ = new WeakMap()
 
-class Label extends Sprite {
+class Label extends XSprite {
     constructor(text, options) {
         super()
-        this.text = text
+        this.setText(text)
         __options__.set(this, {})
         this.setOptions(options)
         this.options = { ...options }
@@ -17,11 +18,11 @@ class Label extends Sprite {
         this._initMaterial_()
 
         this.type = 'Label'
-        this.boundBox = new Box2()
     }
 
     setText(text) {
         this.text = text
+        this.name = text
     }
 
     setOptions({
@@ -57,6 +58,9 @@ class Label extends Sprite {
     _initMaterial_() {
         let options = __options__.get(this)
         this.material = new SpriteCanvasMaterial({
+            sizeAttenuation: false,
+            transparent: true,
+            alphaTest: 0.1,
             measure: context => {
                 context.font = options.fontSize + 'px ' + options.fontFace
                 let metrics = context.measureText(this.text)
@@ -109,7 +113,6 @@ class Label extends Sprite {
 
     _updateMaterial_() {
         this.material.needsUpdate = true
-        this.scale.set(this.width / this.canvasScale, this.height / this.canvasScale, 1)
     }
 
     set needsUpdate(value) {
@@ -131,72 +134,6 @@ class Label extends Sprite {
         return this.material.height
     }
 }
-
-const updateBound = (function() {
-    const worldScale = new Vector3()
-    const mvPosition = new Vector3()
-    const vpPosition = new Vector4()
-
-    const alignedPosition = new Vector2()
-    const rotatedPosition = new Vector2()
-    const viewWorldMatrix = new Matrix4()
-
-    const vA = new Vector3()
-    const vB = new Vector3()
-    const vC = new Vector3()
-
-    function transformVertex(vertexPosition, mvPosition, center, scale, sin, cos) {
-        // compute position in camera space
-        alignedPosition
-            .subVectors(vertexPosition, center)
-            .addScalar(0.5)
-            .multiply(scale)
-        // to check if rotation is not zero
-        if (sin !== undefined) {
-            rotatedPosition.x = cos * alignedPosition.x - sin * alignedPosition.y
-            rotatedPosition.y = sin * alignedPosition.x + cos * alignedPosition.y
-        } else {
-            rotatedPosition.copy(alignedPosition)
-        }
-        vertexPosition.copy(mvPosition)
-        vertexPosition.x += rotatedPosition.x
-        vertexPosition.y += rotatedPosition.y
-    }
-
-    return function box(map) {
-        worldScale.set(this.width, this.height, 1)
-        viewWorldMatrix.getInverse(this.modelViewMatrix).premultiply(this.matrixWorld)
-        mvPosition.setFromMatrixPosition(this.modelViewMatrix)
-
-        mvPosition.applyMatrix4(viewWorldMatrix)
-        mvPosition.project(map._camera)
-
-        vpPosition.copy(mvPosition).applyMatrix4(map.viewportMatrix)
-        if (!this.material) return
-        var rotation = this.material.rotation
-        var sin, cos
-        if (rotation !== 0) {
-            cos = Math.cos(rotation)
-            sin = Math.sin(rotation)
-        }
-
-        var center = this.center
-
-        transformVertex(vA.set(-0.5, -0.5, 0), vpPosition, center, worldScale, sin, cos)
-        transformVertex(vB.set(0.5, -0.5, 0), vpPosition, center, worldScale, sin, cos)
-        transformVertex(vC.set(0.5, 0.5, 0), vpPosition, center, worldScale, sin, cos)
-
-        this.boundBox.setFromPoints([vA, vB, vC])
-    }
-})()
-
-Object.assign(Sprite.prototype, {
-    updateBound,
-    updateScale() {
-        this.scale.set(this.width / this.canvasScale, this.height / this.canvasScale, 1)
-    },
-})
-mixinMapObject(Sprite)
 
 mixinMapObject(Label, 'Label')
 

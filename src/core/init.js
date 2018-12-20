@@ -12,7 +12,7 @@ export function initMixin(XMap) {
             this.options = options
             this.$wrapper = typeof el == 'string' ? document.querySelector(el) : el
             this.$wrapper.style.overflow = 'hidden'
-            this.$wrapper.style.display = 'relative !important'
+            this.$wrapper.style.position = 'relative !important'
 
             this._overlays = new Set()
 
@@ -26,8 +26,6 @@ export function initMixin(XMap) {
 
             initLoaders(this)
             startRenderer(this)
-
-            window.map = this
         },
     })
     Object.defineProperties(XMap.prototype, {
