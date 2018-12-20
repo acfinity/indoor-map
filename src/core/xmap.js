@@ -9,10 +9,11 @@ import { REVISION } from '../constants.js'
 
 class XMap {
     constructor(el, options = {}) {
-        if (IS_DEBUG) {
-            console.log(`XMap init start. ${REVISION}`)
-        }
+
+        console.log(`XMap init start. ${REVISION}`)
+
         this._init_(el, options)
+        
     }
 }
 initMixin(XMap)
