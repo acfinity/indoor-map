@@ -1,12 +1,10 @@
-# Indoor Map 3d
-an indoor map with javascript, 2d is on the way
+# Indoor Map
+an indoor map with javascript
 
-# Base on
-Code: https://github.com/wolfwind521/indoor3D
+# Examples
+- [Demos](https://xincept.github.io/map/examples/jsdemo.html)
 
-Demo: http://wolfwind521.github.io/
-
-# After checkout
+# After clone
 npm install -g eslint prettier
 
 Install VSCode Extensions:
