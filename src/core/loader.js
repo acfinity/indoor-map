@@ -2,6 +2,8 @@ import MapLoader from '../loaders/map-loader'
 import themeLoader from '../loaders/theme-loader'
 import { clearRenderer, loadModel } from './view'
 
+const __currentTheme__ = new WeakMap()
+
 function changeTheme(mo, theme) {
     function changeTheme(object) {
         if (object.onThemeChange) object.onThemeChange(theme)
@@ -19,7 +21,10 @@ function changeTheme(mo, theme) {
         }
         clearRenderer(mo, background, 1)
     }
-    mo.building && changeTheme(mo.building)
+    if (mo.building) {
+        mo.building.boundNeedsUpdate = true
+        changeTheme(mo.building)
+    }
 }
 
 export function loaderMixin(XMap) {
@@ -31,7 +36,7 @@ export function loaderMixin(XMap) {
                     .load(fileName)
                     .then(building => {
                         loadModel(this, building)
-                        changeTheme(this, this.themeLoader.getTheme(this._currentTheme))
+                        changeTheme(this, this.themeLoader.getTheme(__currentTheme__.get(this)))
 
                         building.showFloor('F1')
 
@@ -53,8 +58,10 @@ export function loaderMixin(XMap) {
             if (!theme) {
                 throw new Error('theme not exists')
             }
-            this._currentTheme = name
-            changeTheme(this, theme)
+            if (name != __currentTheme__.get(this)) {
+                __currentTheme__.set(this, name)
+                changeTheme(this, theme)
+            }
         },
 
         getMapStyle() {

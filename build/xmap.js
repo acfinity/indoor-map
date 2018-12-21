@@ -47881,7 +47881,7 @@
 	    let hw = width / 2,
 	        hh = height / 2;
 	    renderer.viewportMatrix.set(hw, 0, 0, hw, 0, -hh, 0, hh);
-	    this.updateProjectionMatrix = true;
+	    mo.updateProjectionMatrix = true;
 	}
 
 	function initView(mo) {
@@ -48568,6 +48568,8 @@
 	    onBeforeRender(renderer, scene, camera) {
 	        if (this.width && this.height) {
 	            this.scale.set(this.width * camera.spriteScale, this.height * camera.spriteScale, 1);
+	        } else {
+	            this.visible = false;
 	        }
 	    }
 	}
@@ -49012,7 +49014,12 @@
 	        let sprite = this;
 	        sprite.onThemeChange = theme => {
 	            if (theme.materialMap.has(this.info.type)) {
+	                sprite.width = PUB_POINT_SIZE.width;
+	                sprite.height = PUB_POINT_SIZE.height;
 	                sprite.material = theme.materialMap.get(this.info.type);
+	            } else {
+	                sprite.width = 0;
+	                sprite.height = 0;
 	            }
 	        };
 	        sprite.width = PUB_POINT_SIZE.width;
@@ -49177,35 +49184,6 @@
 
 	    onThemeChange() {}
 
-	    onBeforeRender(renderer, scene, camera) {
-	        if (!this.boundNeedsUpdate) return
-	        this.floors
-	            .filter(it => it.visible)
-	            .forEach(floor => {
-	                for (let i in floor.sprites) {
-	                    const sprite1 = floor.sprites[i];
-	                    if (!this.$map.showNames && !sprite1.isPubPoint) {
-	                        sprite1.visible = false;
-	                        continue
-	                    }
-	                    if (!this.$map.showPubPoints && sprite1.isPubPoint) {
-	                        sprite1.visible = false;
-	                        continue
-	                    }
-	                    sprite1.updateBound(renderer, scene, camera);
-	                    sprite1.visible = true;
-	                    for (let j = 0; j < i; j++) {
-	                        const sprite2 = floor.sprites[j];
-	                        if (sprite2.visible && sprite2.boundBox.intersectsBox(sprite1.boundBox)) {
-	                            sprite1.visible = false;
-	                            break
-	                        }
-	                    }
-	                }
-	            });
-	        this.boundNeedsUpdate = false;
-	    }
-
 	    showFloor(floorNum) {
 	        if (floorNum > this.groundFloor || floorNum < -this.underFloor || floorNum === 0) {
 	            throw new Error('Invalid floor number.')
@@ -49263,6 +49241,44 @@
 	            return this.floors ? this.floors.map(it => it.name) : []
 	        },
 	    },
+	});
+
+	Object.assign(Building.prototype, {
+	    onBeforeRender: (function() {
+	        const boundBoxSize = new Vector2();
+	        return function(renderer, scene, camera) {
+	            if (!this.boundNeedsUpdate) return
+	            this.floors
+	                .filter(it => it.visible)
+	                .forEach(floor => {
+	                    for (let i in floor.sprites) {
+	                        const sprite1 = floor.sprites[i];
+	                        if (!this.$map.showNames && !sprite1.isPubPoint) {
+	                            sprite1.visible = false;
+	                            continue
+	                        }
+	                        if (!this.$map.showPubPoints && sprite1.isPubPoint) {
+	                            sprite1.visible = false;
+	                            continue
+	                        }
+	                        sprite1.updateBound(renderer, scene, camera);
+	                        if (sprite1.boundBox.getSize(boundBoxSize).width < 1e-3) {
+	                            sprite1.visible = false;
+	                            continue
+	                        }
+	                        sprite1.visible = true;
+	                        for (let j = 0; j < i; j++) {
+	                            const sprite2 = floor.sprites[j];
+	                            if (sprite2.visible && sprite2.boundBox.intersectsBox(sprite1.boundBox)) {
+	                                sprite1.visible = false;
+	                                break
+	                            }
+	                        }
+	                    }
+	                });
+	            this.boundNeedsUpdate = false;
+	        }
+	    })(),
 	});
 
 	class MapLoader extends Loader {
@@ -49451,6 +49467,8 @@
 
 	var themeLoader = new ThemeLoader();
 
+	const __currentTheme__ = new WeakMap();
+
 	function changeTheme$1(mo, theme) {
 	    function changeTheme$$1(object) {
 	        if (object.onThemeChange) object.onThemeChange(theme);
@@ -49468,7 +49486,10 @@
 	        }
 	        clearRenderer(mo, background, 1);
 	    }
-	    mo.building && changeTheme$$1(mo.building);
+	    if (mo.building) {
+	        mo.building.boundNeedsUpdate = true;
+	        changeTheme$$1(mo.building);
+	    }
 	}
 
 	function loaderMixin(XMap) {
@@ -49480,7 +49501,7 @@
 	                    .load(fileName)
 	                    .then(building => {
 	                        loadModel(this, building);
-	                        changeTheme$1(this, this.themeLoader.getTheme(this._currentTheme));
+	                        changeTheme$1(this, this.themeLoader.getTheme(__currentTheme__.get(this)));
 
 	                        building.showFloor('F1');
 
@@ -49502,8 +49523,10 @@
 	            if (!theme) {
 	                throw new Error('theme not exists')
 	            }
-	            this._currentTheme = name;
-	            changeTheme$1(this, theme);
+	            if (name != __currentTheme__.get(this)) {
+	                __currentTheme__.set(this, name);
+	                changeTheme$1(this, theme);
+	            }
 	        },
 
 	        getMapStyle() {
@@ -49964,6 +49987,7 @@
 	    },
 
 	    isOverlay: {
+	        configurable: false,
 	        value: true,
 	        writable: false,
 	    },
@@ -49985,10 +50009,36 @@
 
 	Object.defineProperties(HTMLOverlay.prototype, {
 	    isHTMLOverlay: {
+	        configurable: false,
 	        value: true,
 	        writable: false,
 	    },
 	});
+
+	/**
+	 * make an easing function
+	 * @param {Number} [count=1] bounce times
+	 * @param {Number} [decay=0.5] decay of bouncing height
+	 * @param {Number} [delay=0] delay after bouncing
+	 * @return {Function} easing function
+	 */
+	function bounceEasing(count = 1, decay = 0.5, delay = 0) {
+	    let q = Math.sqrt(decay);
+	    let t = (1 - delay) / ((1 - Math.pow(q, count)) / (1 - q)) / 2;
+	    let s = 1 / Math.pow(t, 2);
+	    let i, temp;
+	    return k => {
+	        temp = t;
+	        for (i = 0; i < count; i++) {
+	            if (k < 2 * temp) {
+	                return (Math.pow(temp, 2) - Math.pow(k - temp, 2)) * s
+	            }
+	            k -= 2 * temp;
+	            temp *= q;
+	        }
+	        return 0
+	    }
+	}
 
 	const MARKER_SIZE = new Vector2(20, 20);
 	const __options__$1 = new WeakMap();
@@ -50020,6 +50070,38 @@
 	        }
 	        if (this.object3D && offset) {
 	            this.object3D.center.set(0.5 - offset.x / this.object3D.width, 0.5 + offset.y / this.object3D.height);
+	        }
+	    }
+
+	    jump({ repeat = 0, duration = 1, delay = 0, height = 40 } = {}) {
+	        this.jumpStop();
+	        if (duration < 1e-3) {
+	            duration = 1;
+	        }
+	        delay = Math.max(delay, 0);
+	        if (height < 1e-3) {
+	            height = 40;
+	        }
+	        let revert = () => {
+	            console.log(111111);
+	            let { offset } = __options__$1.get(this);
+	            if (this.object3D && offset) {
+	                this.object3D.center.set(0.5 - offset.x / this.object3D.width, 0.5 + offset.y / this.object3D.height);
+	            }
+	            this._animation_ = undefined;
+	        };
+	        this._animation_ = new TWEEN.Tween(this.object3D.center)
+	            .to({ y: -height / this.object3D.height }, (duration + delay) * 1000)
+	            .easing(bounceEasing(3, 0.4, delay / (duration + delay)))
+	            .repeat(repeat > 0 ? repeat : Infinity)
+	            .onStop(revert)
+	            .onComplete(revert)
+	            .start();
+	    }
+
+	    jumpStop() {
+	        if (this._animation_) {
+	            this._animation_.stop();
 	        }
 	    }
 
@@ -50056,11 +50138,15 @@
 	        this.object3D = sprite;
 	        return sprite
 	    }
-
-	    get isMarker() {
-	        return true
-	    }
 	}
+
+	Object.defineProperties(Marker.prototype, {
+	    isMarker: {
+	        configurable: false,
+	        writable: false,
+	        value: true,
+	    },
+	});
 
 	class HTMLInfoWindow extends HTMLOverlay {
 	    initialize() {
@@ -50081,6 +50167,14 @@
 	        this.$el.style.zIndex = position.zIndex;
 	    }
 	}
+
+	Object.defineProperties(HTMLInfoWindow.prototype, {
+	    isHTMLInfoWindow: {
+	        configurable: false,
+	        writable: false,
+	        value: true,
+	    },
+	});
 
 	exports.Map = XMap;
 	exports.REVISION = REVISION$1;

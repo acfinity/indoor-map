@@ -20,7 +20,12 @@ class PubPoint extends XSprite {
         let sprite = this
         sprite.onThemeChange = theme => {
             if (theme.materialMap.has(this.info.type)) {
+                sprite.width = PUB_POINT_SIZE.width
+                sprite.height = PUB_POINT_SIZE.height
                 sprite.material = theme.materialMap.get(this.info.type)
+            } else {
+                sprite.width = 0
+                sprite.height = 0
             }
         }
         sprite.width = PUB_POINT_SIZE.width

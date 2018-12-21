@@ -22,6 +22,8 @@ class XSprite extends Sprite {
     onBeforeRender(renderer, scene, camera) {
         if (this.width && this.height) {
             this.scale.set(this.width * camera.spriteScale, this.height * camera.spriteScale, 1)
+        } else {
+            this.visible = false
         }
     }
 }

@@ -1,4 +1,4 @@
-import { Vector3, Mesh, Shape, ExtrudeBufferGeometry } from '../libs/threejs/three.module'
+import { Vector3, Mesh, Shape, ExtrudeBufferGeometry, Vector2 } from '../libs/threejs/three.module'
 import { mixinMapObject } from './map-object'
 import Floor from './floor'
 import TWEEN from '../libs/Tween'
@@ -69,35 +69,6 @@ class Building extends Mesh {
 
     onThemeChange() {}
 
-    onBeforeRender(renderer, scene, camera) {
-        if (!this.boundNeedsUpdate) return
-        this.floors
-            .filter(it => it.visible)
-            .forEach(floor => {
-                for (let i in floor.sprites) {
-                    const sprite1 = floor.sprites[i]
-                    if (!this.$map.showNames && !sprite1.isPubPoint) {
-                        sprite1.visible = false
-                        continue
-                    }
-                    if (!this.$map.showPubPoints && sprite1.isPubPoint) {
-                        sprite1.visible = false
-                        continue
-                    }
-                    sprite1.updateBound(renderer, scene, camera)
-                    sprite1.visible = true
-                    for (let j = 0; j < i; j++) {
-                        const sprite2 = floor.sprites[j]
-                        if (sprite2.visible && sprite2.boundBox.intersectsBox(sprite1.boundBox)) {
-                            sprite1.visible = false
-                            break
-                        }
-                    }
-                }
-            })
-        this.boundNeedsUpdate = false
-    }
-
     showFloor(floorNum) {
         if (floorNum > this.groundFloor || floorNum < -this.underFloor || floorNum === 0) {
             throw new Error('Invalid floor number.')
@@ -155,6 +126,44 @@ Object.defineProperties(Building.prototype, {
             return this.floors ? this.floors.map(it => it.name) : []
         },
     },
+})
+
+Object.assign(Building.prototype, {
+    onBeforeRender: (function() {
+        const boundBoxSize = new Vector2()
+        return function(renderer, scene, camera) {
+            if (!this.boundNeedsUpdate) return
+            this.floors
+                .filter(it => it.visible)
+                .forEach(floor => {
+                    for (let i in floor.sprites) {
+                        const sprite1 = floor.sprites[i]
+                        if (!this.$map.showNames && !sprite1.isPubPoint) {
+                            sprite1.visible = false
+                            continue
+                        }
+                        if (!this.$map.showPubPoints && sprite1.isPubPoint) {
+                            sprite1.visible = false
+                            continue
+                        }
+                        sprite1.updateBound(renderer, scene, camera)
+                        if (sprite1.boundBox.getSize(boundBoxSize).width < 1e-3) {
+                            sprite1.visible = false
+                            continue
+                        }
+                        sprite1.visible = true
+                        for (let j = 0; j < i; j++) {
+                            const sprite2 = floor.sprites[j]
+                            if (sprite2.visible && sprite2.boundBox.intersectsBox(sprite1.boundBox)) {
+                                sprite1.visible = false
+                                break
+                            }
+                        }
+                    }
+                })
+            this.boundNeedsUpdate = false
+        }
+    })(),
 })
 
 export default Building
