@@ -37,7 +37,7 @@ class Marker extends Overlay {
         }
     }
 
-    jump({ repeat = 0, duration = 1, delay = 0, height = 40 } = {}) {
+    jump({ repeat = -1, duration = 1, delay = 0, height = 40 } = {}) {
         this.jumpStop()
         if (duration < 1e-3) {
             duration = 1
@@ -57,7 +57,7 @@ class Marker extends Overlay {
         this._animation_ = new TWEEN.Tween(this.object3D.center)
             .to({ y: -height / this.object3D.height }, (duration + delay) * 1000)
             .easing(bounceEasing(3, 0.4, delay / (duration + delay)))
-            .repeat(repeat > 0 ? repeat : Infinity)
+            .repeat(repeat > -1 ? repeat : Infinity)
             .onStop(revert)
             .onComplete(revert)
             .start()

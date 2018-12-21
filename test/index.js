@@ -10,7 +10,7 @@ var map = new XMap.Map('#indoor-map', {
     // showPubPoints: false
 })
 map.load('./data.json')
-let location = new XMap.Location('F1', 100, 0)
+let location = new XMap.Location('aaa', 100, 0)
 var marker = new XMap.Marker(location, {
     icon: 'img/marker_red_sprite.png',
     size: new XMap.Point(19, 25),

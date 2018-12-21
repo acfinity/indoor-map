@@ -39,11 +39,11 @@ export function loaderMixin(XMap) {
                         changeTheme(this, this.themeLoader.getTheme(__currentTheme__.get(this)))
 
                         building.showFloor('F1')
-
-                        this._overlays.forEach(overlay => this._addOverlay(overlay))
-
+                        
                         this.dispatchEvent({ type: 'mapLoaded' })
                         resolve(this)
+                        
+                        this._overlays.forEach(overlay => this._addOverlay(overlay))
                     })
                     .catch(e => reject(e))
             })
