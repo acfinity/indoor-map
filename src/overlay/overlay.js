@@ -38,6 +38,7 @@ Object.defineProperties(Overlay.prototype, {
     },
 
     isOverlay: {
+        configurable: false,
         value: true,
         writable: false,
     },

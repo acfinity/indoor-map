@@ -12,14 +12,15 @@ var map = new XMap.Map('#indoor-map', {
 map.load('./data.json')
 let location = new XMap.Location('F1', 100, 0)
 var marker = new XMap.Marker(location, {
-    icon: 'img/peopleMarker.png',
-    size: new XMap.Point(25),
+    icon: 'img/marker_red_sprite.png',
+    size: new XMap.Point(19, 25),
     offset: new XMap.Point(0, -12.5),
 })
 window.map = map
 window.marker = marker
 window.XMap = XMap
 marker.on('click', e => console.log(e))
+marker.jump({ duration: 0.8, delay: 0.4 })
 map.addOverlay(marker)
 map.once('click', event => marker.setLocation(new XMap.Location(event.floor, event.x, event.y)))
 map.loadTheme('light', 'theme/light.json').then(() => map.setTheme('light'))

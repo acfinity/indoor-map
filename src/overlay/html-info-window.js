@@ -20,4 +20,12 @@ class HTMLInfoWindow extends HTMLOverlay {
     }
 }
 
+Object.defineProperties(HTMLInfoWindow.prototype, {
+    isHTMLInfoWindow: {
+        configurable: false,
+        writable: false,
+        value: true,
+    },
+})
+
 export default HTMLInfoWindow

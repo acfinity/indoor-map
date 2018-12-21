@@ -1,6 +1,8 @@
 import { Vector2, SpriteMaterial, TextureLoader, LinearFilter } from '../libs/threejs/three.module'
 import Overlay from './overlay'
 import XSprite from '../objects/XSprite'
+import TWEEN from '../libs/Tween'
+import { bounceEasing } from '../utils/animation'
 
 const MARKER_SIZE = new Vector2(20, 20)
 const __options__ = new WeakMap()
@@ -32,6 +34,38 @@ class Marker extends Overlay {
         }
         if (this.object3D && offset) {
             this.object3D.center.set(0.5 - offset.x / this.object3D.width, 0.5 + offset.y / this.object3D.height)
+        }
+    }
+
+    jump({ times = 0, duration = 1, delay = 0, height = 40 } = {}) {
+        this.jumpStop()
+        if (duration < 1e-3) {
+            duration = 1
+        }
+        delay = Math.max(delay, 0)
+        if (height < 1e-3) {
+            height = 40
+        }
+        let revert = () => {
+            console.log(111111)
+            let { offset } = __options__.get(this)
+            if (this.object3D && offset) {
+                this.object3D.center.set(0.5 - offset.x / this.object3D.width, 0.5 + offset.y / this.object3D.height)
+            }
+            this._animation_ = undefined
+        }
+        this._animation_ = new TWEEN.Tween(this.object3D.center)
+            .to({ y: -height / this.object3D.height }, (duration + delay) * 1000)
+            .easing(bounceEasing(3, 0.4, delay / (duration + delay)))
+            .repeat(times > 0 ? times : Infinity)
+            .onStop(revert)
+            .onComplete(revert)
+            .start()
+    }
+
+    jumpStop() {
+        if (this._animation_) {
+            this._animation_.stop()
         }
     }
 
@@ -68,10 +102,14 @@ class Marker extends Overlay {
         this.object3D = sprite
         return sprite
     }
-
-    get isMarker() {
-        return true
-    }
 }
+
+Object.defineProperties(Marker.prototype, {
+    isMarker: {
+        configurable: false,
+        writable: false,
+        value: true,
+    },
+})
 
 export default Marker

@@ -16,6 +16,7 @@ class HTMLOverlay extends Overlay {
 
 Object.defineProperties(HTMLOverlay.prototype, {
     isHTMLOverlay: {
+        configurable: false,
         value: true,
         writable: false,
     },

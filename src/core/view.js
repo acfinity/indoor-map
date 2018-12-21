@@ -213,7 +213,7 @@ function onMapResize(mo) {
     let hw = width / 2,
         hh = height / 2
     renderer.viewportMatrix.set(hw, 0, 0, hw, 0, -hh, 0, hh)
-    this.updateProjectionMatrix = true
+    mo.updateProjectionMatrix = true
 }
 
 export function initView(mo) {
