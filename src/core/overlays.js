@@ -14,12 +14,12 @@ export function overlayMixin(XMap) {
         },
 
         _addOverlay(overlay) {
-            if (this.building) {
+            if (this.mapScene) {
                 if (overlay.isHTMLOverlay) {
                     this.$overlayWrapper.appendChild(overlay.$el)
                     overlay.render(this.locationToViewport(overlay.location))
                 } else {
-                    let floorObj = this.building.getFloor(overlay.floor)
+                    let floorObj = this.mapScene.getFloor(overlay.floor)
                     if (floorObj) {
                         floorObj.add(overlay.object3D)
                     } else {

@@ -1,4 +1,4 @@
-import { Vector2, SpriteMaterial, TextureLoader, LinearFilter } from '../libs/threejs/three.module'
+import { Vector2, SpriteMaterial, TextureLoader, LinearFilter } from '../libs/threejs/index'
 import Overlay from './overlay'
 import XSprite from '../objects/XSprite'
 import TWEEN from '../libs/Tween'
@@ -6,6 +6,39 @@ import { bounceEasing } from '../utils/animation'
 
 const MARKER_SIZE = new Vector2(20, 20)
 const __options__ = new WeakMap()
+
+function initObject3D(obj, location) {
+    let { icon, size, offset } = __options__.get(obj)
+    size = size || MARKER_SIZE
+    size.ceil()
+    let texture = new TextureLoader().load(icon, t => {
+        t.needsUpdate = true
+    })
+    texture.minFilter = LinearFilter
+    let material = new SpriteMaterial({
+        map: texture,
+        sizeAttenuation: false,
+        transparent: true,
+        alphaTest: 0.1,
+        depthTest: false,
+    })
+
+    let sprite = new XSprite(material)
+    sprite.width = size.width
+    sprite.height = size.height
+    sprite.position.copy(location.localPosition)
+    sprite.handler = obj
+    sprite.type = 'Marker'
+    if (offset) {
+        sprite.center.set(0.5 - offset.x / size.width, 0.5 + offset.y / size.height)
+    } else {
+        sprite.center.set(0.5, 0.5)
+    }
+    sprite.scale.set(1e-7, 1e-7, 1)
+    sprite.renderOrder = 20
+    sprite.onViewModeChange = is3dMode => sprite.position.setZ(is3dMode ? location.z : 4)
+    return sprite
+}
 
 class Marker extends Overlay {
     constructor(location, options = {}) {
@@ -18,7 +51,13 @@ class Marker extends Overlay {
         this.floor = location.floor
         this.position = location.localPosition
 
-        this.initObject3D()
+        Object.defineProperties(this, {
+            object3D: {
+                configurable: false,
+                writable: false,
+                value: initObject3D(this, location),
+            },
+        })
     }
 
     setOptions({ icon, size, offset }) {
@@ -69,38 +108,9 @@ class Marker extends Overlay {
         }
     }
 
-    initObject3D() {
-        let { icon, size, offset } = __options__.get(this)
-        size = size || MARKER_SIZE
-        size.ceil()
-        let texture = new TextureLoader().load(icon, t => {
-            t.needsUpdate = true
-        })
-        texture.minFilter = LinearFilter
-        let material = new SpriteMaterial({
-            map: texture,
-            sizeAttenuation: false,
-            transparent: true,
-            alphaTest: 0.1,
-            depthTest: false,
-        })
-
-        let sprite = new XSprite(material)
-        sprite.width = size.width
-        sprite.height = size.height
-        sprite.position.copy(this.position)
-        sprite.handler = this
-        sprite.type = 'Marker'
-        if (offset) {
-            sprite.center.set(0.5 - offset.x / size.width, 0.5 + offset.y / size.height)
-        } else {
-            sprite.center.set(0.5, 0.5)
-        }
-        sprite.renderOrder = 10
-        sprite.scale.set(1e-7, 1e-7, 1)
-        sprite.onViewModeChange = is3dMode => sprite.position.setZ(is3dMode ? this.currentLocation.z : 4)
-        this.object3D = sprite
-        return sprite
+    setLocation(location /*, animate*/) {
+        this.currentLocation = location
+        this.object3D.position.copy(location.localPosition)
     }
 }
 

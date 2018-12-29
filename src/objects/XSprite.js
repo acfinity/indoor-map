@@ -1,4 +1,4 @@
-import { Vector2, Vector3, Vector4, Matrix4, Sprite, Box2, Triangle } from '../libs/threejs/three.module'
+import { Vector2, Vector3, Vector4, Matrix4, Sprite, Box2, Triangle } from '../libs/threejs/index'
 
 class XSprite extends Sprite {
     constructor(...args) {

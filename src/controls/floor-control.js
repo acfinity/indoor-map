@@ -20,7 +20,7 @@ class FloorControl extends BaseControl {
         mm.on(
             'mapLoaded',
             (this._mapLoaded_ = () => {
-                this._show_(mm.building)
+                this._show_(mm.mapScene)
             })
         )
         mm.on(
@@ -35,8 +35,8 @@ class FloorControl extends BaseControl {
                 this.setFloor(floor)
             })
         )
-        if (mm.building) {
-            this._show_(mm.building)
+        if (mm.mapScene) {
+            this._show_(mm.mapScene)
         }
     }
 
@@ -50,7 +50,7 @@ class FloorControl extends BaseControl {
     }
 
     _refresh_() {
-        if (!this.$map || !this.$map.building) {
+        if (!this.$map || !this.$map.mapScene) {
             this.$el.style.display = 'none'
         } else if (this.$elAll) {
             if (this.$map.viewMode === ViewMode.MODE_2D) {
@@ -66,9 +66,8 @@ class FloorControl extends BaseControl {
         }
     }
 
-    _show_(building) {
-        this.building = building
-        const floors = new Map(building.floors.map(f => [f.info.name, f]))
+    _show_(mapScene) {
+        const floors = new Map(mapScene.floors.map(f => [f.info.name, f]))
         if (floors.size < 2) {
             this.$el.style.display = 'none'
             this.$elAll = null
@@ -77,7 +76,7 @@ class FloorControl extends BaseControl {
         }
         while (this.$el.lastChild) this.$el.removeChild(this.$el.lastChild)
 
-        building.floors
+        mapScene.floors
             .map(f => f.name)
             .concat('All')
             .reverse()

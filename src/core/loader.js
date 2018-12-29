@@ -21,9 +21,9 @@ function changeTheme(mo, theme) {
         }
         clearRenderer(mo, background, 1)
     }
-    if (mo.building) {
-        mo.building.boundNeedsUpdate = true
-        changeTheme(mo.building)
+    if (mo.mapScene) {
+        mo.mapScene.boundNeedsUpdate = true
+        changeTheme(mo.mapScene)
     }
 }
 
@@ -34,11 +34,11 @@ export function loaderMixin(XMap) {
                 this.clear()
                 this.mapLoader
                     .load(fileName)
-                    .then(building => {
-                        loadModel(this, building)
+                    .then(mapScene => {
+                        loadModel(this, mapScene)
                         changeTheme(this, this.themeLoader.getTheme(__currentTheme__.get(this)))
 
-                        building.showFloor('F1')
+                        mapScene.showFloor('F1')
                         
                         this.dispatchEvent({ type: 'mapLoaded' })
                         resolve(this)

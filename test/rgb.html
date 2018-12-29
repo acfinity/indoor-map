@@ -1,0 +1,157 @@
+<html>
+    <head>
+        <style>
+            * {
+                padding: 0;
+                margin: 0;
+            }
+            body {
+                position: relative;
+                overflow: hidden;
+            }
+            #background {
+                position: absolute;
+                top: 0;
+                bottom: 0;
+                left: 0;
+                right: 0;
+                overflow: auto;
+            }
+            #input {
+                position: absolute;
+                top: 10px;
+                left: 10px;
+                width: 240px;
+                height: 40px;
+                font-size: 17px;
+                padding: 5px;
+            }
+
+            #input::-webkit-input-placeholder {
+                color: #aab2bd;
+            }
+
+            #hex {
+                width: 100%;
+                display: flex;
+                flex-wrap: wrap;
+                padding: 3px;
+            }
+            #hex > div {
+                position: relative;
+                width: 266px;
+                height: 200px;
+                margin: 2px;
+            }
+
+            #hex > div.focus {
+                outline: #3390ff ridge 4px;
+            }
+
+            #hex > div > div {
+                position: absolute;
+                width: 100%;
+                font-size: 20px;
+                text-align: center;
+                flex-wrap: wrap;
+                bottom: 20px;
+                text-shadow: -1px -1px 0 #fff, 1px -1px 0 #fff, -1px 1px 0 #fff, 1px 1px 0 #fff;
+            }
+            #hex > div > div::selection {
+                text-shadow: none;
+                background: #3390ff;
+                color: white;
+            }
+        </style>
+    </head>
+    <body>
+        <div id="background"><div id="hex" onclick="clearFocus();"></div></div>
+        <input id="input" type="text" onkeyup="onInputChange();" placeholder="255,255,255" />
+        <script>
+            let root = document.getElementById('hex')
+            let root2 = document.getElementById('background')
+            let colors = [
+                '#ffffff',
+                '#969696',
+                '#ff6633',
+                '#ffd3b2',
+                '#c9e7ca',
+                '#e5b2ff',
+                '#ffd7d4',
+                '#c6e4fc',
+                '#e6e4d1',
+                '#d5e1e7',
+                '#ebe9e9',
+                '#fff1a8',
+                '#d7ebc1',
+                '#f5f8f5',
+                '#ccf1f6',
+                '#d9dcff',
+                '#e1d1eb',
+                '#ccf2ed',
+                '#d8d4d3',
+                '#d6dcff',
+                '#fbe6fe',
+                '#bebfc1',
+                '#f22a8d',
+                '#f8e5e1',
+                '#c7cf8c',
+                '#4d8744',
+                '#95dcf9',
+            ]
+            var clearFocus = () => {
+                Array.from(document.querySelectorAll('#hex>div')).forEach(it => {
+                    it.classList.remove('focus')
+                })
+            }
+            const createElement = color => {
+                let el = document.createElement('div')
+                el.style.backgroundColor = color
+
+                let value = document.createElement('div')
+                value.innerHTML = color
+                el.appendChild(value)
+
+                return el
+            }
+
+            let rgb = (...rgb) => {
+                let ret = '#'
+                rgb.forEach(v => (ret += `00${parseInt(v).toString(16)}`.slice(-2)))
+                return ret
+            }
+
+            colors.forEach(c => root.appendChild(createElement(c)))
+
+            var onInputChange = function() {
+                let input = event.target.value.trim()
+                if (event.keyCode !== 13) return
+                let color
+                if (/^\d{1,3}\s*,\s*\d{1,3}\s*,\s*\d{1,3}$/.test(input)) {
+                    let values = input.split(',').map(it => parseInt(it))
+                    event.target.value = values.join(',')
+                    color = rgb(...values)
+                } else if (/^#?[0-9A-Fa-f]{6}$/.test(input)) {
+                    input = input.slice(-6).toLowerCase()
+                    event.target.value = [0, 0, 0].map((_, i) => parseInt(input.slice(2 * i, 2 * i + 2), 16)).join(',')
+                    color = '#' + input
+                } else {
+                    return
+                }
+                let el
+                if (colors.includes(color)) {
+                    el = document.querySelectorAll('#hex>div')[colors.indexOf(color)]
+                    // root.removeChild(el)
+                } else {
+                    colors.push(color)
+                    el = createElement(color)
+                    root.appendChild(el)
+                }
+
+                root2.scrollTo(0, el.offsetTop - root2.clientHeight / 2 + el.clientHeight / 2)
+                clearFocus()
+                el.classList.add('focus')
+            }
+        </script>
+    </body>
+</html>

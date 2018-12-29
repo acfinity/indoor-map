@@ -17,7 +17,7 @@ import {
     DoubleSide,
     // LinearFilter,
     // RepeatWrapping,
-} from '../libs/threejs/three.module'
+} from '../libs/threejs/index'
 import { mixinMapObject } from './map-object'
 import { parsePoints } from '../utils/view'
 import Label from './label'
@@ -48,12 +48,13 @@ class Room extends Mesh {
         let geometry2d = new ShapeGeometry(shape)
         this.geometry = geometry3d
         this.material = new MeshLambertMaterial()
-        this.material.alphaTest = 0.1
+        // this.material.alphaTest = 0.1
         let object = this
         object.onViewModeChange = is3dMode => {
             object.geometry = is3dMode ? geometry3d : geometry2d
             object.position.setZ(is3dMode ? 0 : 1)
         }
+        this.renderOrder = 2
         this.type = 'Room'
         let box = new Box2()
 
@@ -99,6 +100,7 @@ class Room extends Mesh {
                     cube.geometry = is3dMode ? geometry3d : geometry2d
                     cube.position.setZ(is3dMode ? this.floor.info.height / 2 : 2)
                 }
+                cube.renderOrder = 3
                 object.add(cube)
             })
         } else {
@@ -109,7 +111,7 @@ class Room extends Mesh {
             wire.position.set(0, 0, this.floor.info.height)
             wire.onViewModeChange = is3dMode => wire.position.setZ(is3dMode ? this.info.height : 2)
             object.add(wire)
-
+            wire.renderOrder = 3
             this.onThemeChange = theme => {
                 let roomStyle = theme.roomStyle[this.info.category] || theme.roomStyle['default']
                 this.material.setValues(roomStyle)
@@ -136,31 +138,33 @@ class Room extends Mesh {
                     cube.geometry = is3dMode ? geometry3d : geometry2d
                     cube.position.setZ(is3dMode ? this.info.height / 2 : 2)
                 }
+                cube.renderOrder = 3
                 object.add(cube)
             })
         }
 
         let sprite = new Label(this.info.name)
-        sprite.onThemeChange = theme => {
-            let material = theme.materialMap.get(this.info.category + '')
-            sprite.setOptions(theme.fontStyle)
-            if (!material || !material.map) {
-                sprite.setIcon()
-            } else {
-                sprite.setIcon({ icon: material.map })
-            }
-            sprite.needsUpdate = true
-        }
         if (sprite) {
+            sprite.onThemeChange = theme => {
+                let material = theme.materialMap.get(this.info.category + '')
+                sprite.setOptions(theme.fontStyle)
+                if (!material || !material.map) {
+                    sprite.setIcon()
+                } else {
+                    material.depthTest = false
+                    sprite.setIcon({ icon: material.map })
+                }
+                sprite.needsUpdate = true
+            }
             let center = box.setFromPoints(points).getCenter(new Vector2())
             sprite.position.set(center.x, center.y, this.floor.info.height + 5)
             sprite.center.set(0.5, 0)
-            sprite.renderOrder = 1
+            sprite.renderOrder = 10
             sprite.onViewModeChange = is3dMode => sprite.position.setZ(is3dMode ? this.floor.info.height + 5 : 3)
             object.add(sprite)
+            sprite.renderOrder = 99
+            object.label = sprite
         }
-
-        object.label = sprite
     }
 }
 

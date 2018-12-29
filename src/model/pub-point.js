@@ -1,4 +1,4 @@
-import { Vector2 } from '../libs/threejs/three.module'
+import { Vector2 } from '../libs/threejs/index'
 import { mixinMapObject } from './map-object'
 import XSprite from '../objects/XSprite'
 
@@ -18,24 +18,27 @@ class PubPoint extends XSprite {
 
     initObject3D() {
         let sprite = this
-        sprite.onThemeChange = theme => {
-            if (theme.materialMap.has(this.info.type)) {
-                sprite.width = PUB_POINT_SIZE.width
-                sprite.height = PUB_POINT_SIZE.height
-                sprite.material = theme.materialMap.get(this.info.type)
-            } else {
-                sprite.width = 0
-                sprite.height = 0
-            }
-        }
-        sprite.width = PUB_POINT_SIZE.width
-        sprite.height = PUB_POINT_SIZE.height
+        this.width = PUB_POINT_SIZE.width
+        this.height = PUB_POINT_SIZE.height
         this.scale.copy(sprite.scale)
         this.position.copy(this.center).setZ(this.floor.info.height + 5)
-        sprite.handler = this
-        sprite.center.set(0.5, 0)
-        sprite.renderOrder = 1
-        sprite.onViewModeChange = is3dMode => sprite.position.setZ(is3dMode ? this.floor.info.height + 5 : 3)
+        this.center.set(0.5, 0)
+        this.renderOrder = 99
+    }
+
+    onThemeChange(theme) {
+        if (theme.materialMap.has(this.info.type)) {
+            this.width = PUB_POINT_SIZE.width
+            this.height = PUB_POINT_SIZE.height
+            this.material = theme.materialMap.get(this.info.type).clone()
+        } else {
+            this.width = 0
+            this.height = 0
+        }
+    }
+
+    onViewModeChange(is3dMode) {
+        this.position.setZ(is3dMode ? this.floor.info.height + 5 : 3)
     }
 }
 

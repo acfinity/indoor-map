@@ -1,5 +1,5 @@
-import { Loader, FileLoader } from '../libs/threejs/three.module'
-import Building from '../model/building'
+import { Loader, FileLoader } from '../libs/threejs/index'
+import MapScene from '../model/map-scene'
 
 class MapLoader extends Loader {
     constructor(is3d) {
@@ -25,7 +25,7 @@ class MapLoader extends Loader {
         )
     }
     parse(json) {
-        return new Building(json.data)
+        return new MapScene(json.data)
     }
 }
 

@@ -1,4 +1,4 @@
-import { Vector2 } from '../libs/threejs/three.module'
+import { Vector2 } from '../libs/threejs/index'
 
 export const parsePoints = array => {
     var points = []

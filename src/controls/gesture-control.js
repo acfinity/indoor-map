@@ -1,5 +1,5 @@
 import { addEvent, removeEvent } from '../utils/event'
-import { Vector2, Vector3, Plane, EventDispatcher } from '../libs/threejs/three.module'
+import { Vector2, Vector3, Plane, EventDispatcher } from '../libs/threejs/index'
 import { getCameraRaycast } from '../core/view'
 
 const STATE = {
@@ -8,6 +8,7 @@ const STATE = {
     ZOOM: 1,
     PAN: 2,
     CLICK: 3,
+    RIGHT_CLICK: 4,
     TOUCH_ROTATE: 5,
     TOUCH_ZOOM_PAN: 6,
 }
@@ -52,11 +53,11 @@ class GestureControl {
     }
 
     rotateLeft(angle = autoRotationAngle) {
-        this.$map.rotateTo({ angle: this.$map.rotateAngle - angle, animate: false })
+        this.$map.rotateTo({ angle: this.$map.rotateAngle + angle, animate: false })
     }
 
     rotateRight(angle = autoRotationAngle) {
-        this.$map.rotateTo({ angle: this.$map.rotateAngle + angle, animate: false })
+        this.$map.rotateTo({ angle: this.$map.rotateAngle - angle, animate: false })
     }
 
     rotateUp(angle = autoRotationAngle) {
@@ -152,7 +153,7 @@ class GestureControl {
             } else if (e.button === 1) {
                 this.state = STATE.ZOOM
             } else if (e.button === 2) {
-                this.state = STATE.ROTATE
+                this.state = STATE.RIGHT_CLICK
             }
         }
 
@@ -172,7 +173,8 @@ class GestureControl {
             if (this.deltaVector.length() == 0) {
                 return
             }
-            if (this.state === STATE.ROTATE) {
+            if (this.state === STATE.RIGHT_CLICK || this.state === STATE.ROTATE) {
+                this.state = STATE.RIGHT_CLICK
                 this.rotateLeft(((360 * this.deltaVector.x) / PIXELS_PER_ROUND) * userRotateSpeed)
                 this.rotateUp(((360 * this.deltaVector.y) / PIXELS_PER_ROUND) * userRotateSpeed)
             } else if (this.state === STATE.ZOOM) {
@@ -196,7 +198,7 @@ class GestureControl {
         if (this.state === STATE.NONE) return
         let state = this.state
         this.state = STATE.NONE
-        if (state === STATE.CLICK && this.onClickListener) {
+        if ((state === STATE.CLICK || state === STATE.RIGHT_CLICK) && this.onClickListener) {
             this.onClickListener(e)
         }
     }
@@ -249,7 +251,7 @@ class GestureControl {
 Object.assign(GestureControl.prototype, Object.create(EventDispatcher.prototype))
 Object.assign(GestureControl.prototype, {
     viewToWorld: (function() {
-        const plane = new Plane(new Vector3(0, 1, 0), 0)
+        const plane = new Plane(new Vector3(0, 0, 1), 0)
 
         return function(point) {
             let raycaster = getCameraRaycast(this.$map, point)

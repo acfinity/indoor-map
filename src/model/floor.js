@@ -1,11 +1,4 @@
-import {
-    Path,
-    Shape,
-    Mesh,
-    ExtrudeBufferGeometry,
-    ShapeGeometry,
-    MeshPhongMaterial,
-} from '../libs/threejs/three.module'
+import { Path, Shape, Mesh, ExtrudeBufferGeometry, ShapeGeometry, MeshLambertMaterial } from '../libs/threejs/index'
 import { mixinMapObject } from './map-object'
 import Room from './room'
 import PubPoint from './pub-point'
@@ -32,14 +25,14 @@ class Floor extends Mesh {
         let geometry2d = new ShapeGeometry(shape)
         this.geometry = geometry2d
         let board = new Mesh(geometry3d)
+        this.material = new MeshLambertMaterial()
+        board.material = this.material
         this.onThemeChange = theme => {
-            this.material = new MeshPhongMaterial(theme.floor)
-            board.material = this.material
+            this.material.setValues(theme.floor)
         }
         this.add(board)
         board.position.set(0, 0, -10)
         board.onViewModeChange = is3dMode => (board.visible = is3dMode)
-
         let floorHeight = this.info.height
         if (!floorHeight || floorHeight < 1e-4) {
             floorHeight = 500.0
@@ -49,6 +42,8 @@ class Floor extends Mesh {
         this.handler = this
         this.type = 'Floor'
         this.sprites = []
+        
+        this.renderOrder = 1
 
         let { funcAreas: rooms, pubPoint } = attr
         this.name = this.info.name

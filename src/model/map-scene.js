@@ -1,4 +1,4 @@
-import { Vector3, Mesh, Shape, ExtrudeBufferGeometry, Vector2 } from '../libs/threejs/three.module'
+import { Mesh, Shape, ExtrudeBufferGeometry, Vector2 } from '../libs/threejs/index'
 import { mixinMapObject } from './map-object'
 import Floor from './floor'
 import TWEEN from '../libs/Tween'
@@ -7,7 +7,7 @@ import { parsePoints } from '../utils/view'
 
 const FLOOR_SPACE = 600
 
-class Building extends Mesh {
+class MapScene extends Mesh {
     constructor(attr = {}) {
         super()
         let {
@@ -40,7 +40,7 @@ class Building extends Mesh {
 
     initObject3D() {
         let object = this
-        object.type = 'Building'
+        object.type = 'MapScene'
         object.sprites = []
         this.floors.forEach((floor, index) => {
             object.add(floor)
@@ -60,7 +60,7 @@ class Building extends Mesh {
 
         this.showAllFloors()
 
-        object.rotateOnAxis(new Vector3(1, 0, 0), -Math.PI / 2)
+        // object.rotateOnAxis(new Vector3(1, 0, 0), -Math.PI / 2)
     }
 
     onViewModeChange() {
@@ -87,9 +87,10 @@ class Building extends Mesh {
 
         let index = this.children.filter(obj => obj.isFloor).findIndex(it => it === target)
         new TWEEN.Tween(this.position)
-            .to({ y: -index * FLOOR_SPACE }, current != null ? 150 : 0)
+            .to({ z: -index * FLOOR_SPACE }, current != null ? 150 : 0)
             .onComplete(() => (this.boundNeedsUpdate = true))
             .start()
+        this._updateDepthTest_()
     }
 
     showAllFloors() {
@@ -98,6 +99,18 @@ class Building extends Mesh {
                 obj.visible = this._shouldShowAll_() || obj === this.getFloor(this.currentFloorNum)
             }
         })
+        this._updateDepthTest_()
+    }
+
+    _updateDepthTest_() {
+        this.floors
+            .filter(it => it.visible)
+            .forEach((f, i, arr) => {
+                let top = i === arr.length - 1
+                f.sprites.forEach(s => {
+                    s.material && (s.material.depthTest = !top)
+                })
+            })
     }
 
     getCurrentFloor() {
@@ -113,10 +126,10 @@ class Building extends Mesh {
     }
 }
 
-mixinMapObject(Building)
+mixinMapObject(MapScene)
 
-Object.defineProperties(Building.prototype, {
-    isBuilding: {
+Object.defineProperties(MapScene.prototype, {
+    isMapScene: {
         configurable: false,
         writable: false,
         value: true,
@@ -128,7 +141,7 @@ Object.defineProperties(Building.prototype, {
     },
 })
 
-Object.assign(Building.prototype, {
+Object.assign(MapScene.prototype, {
     onBeforeRender: (function() {
         const boundBoxSize = new Vector2()
         return function(renderer, scene, camera) {
@@ -166,4 +179,4 @@ Object.assign(Building.prototype, {
     })(),
 })
 
-export default Building
+export default MapScene

@@ -1,7 +1,8 @@
-import { Vector2, EventDispatcher } from '../libs/threejs/three.module'
+import { Vector2, EventDispatcher } from '../libs/threejs/index'
 import { getCameraRaycast } from './view'
 
 const __preHover__ = new WeakMap()
+const __pickMode__ = new WeakMap()
 
 export function eventMixin(Class) {
     if (!Class.prototype.dispatchEvent) {
@@ -45,86 +46,109 @@ export function eventMixin(Class) {
                 }
             }
         },
+        pickStart() {
+            __pickMode__.set(this, true)
+        },
+        pickEnd() {
+            __pickMode__.delete(this)
+        },
     })
 }
 
-export const initEvent = (function() {
-    const mouse = new Vector2()
-    const intersectObjects = function(eventType, mo, e) {
-        if (!mo.building) {
-            return
-        }
-        let point = e.touches ? e.touches[0] : e
-        mouse.set(point.pageX, point.pageY)
+const mouse = new Vector2()
+function intersectObjects(eventType, mo, e) {
+    if (!mo.mapScene) {
+        return
+    }
+    let point = e.touches ? e.touches[0] : e
+    mouse.set(point.pageX, point.pageY)
 
-        let raycaster = getCameraRaycast(mo, mouse)
-        return raycaster.intersectObjects(
-            [...mo._overlays]
-                .filter(it => it.hasEventListener(eventType))
+    let objects = Array.from(mo.mapScene.floors)
+    if (!__pickMode__.get(mo)) {
+        objects.splice(
+            0,
+            0,
+            ...Array.from(mo._overlays)
+                .filter(
+                    it =>
+                        it.hasEventListener(eventType) &&
+                        it.object3D &&
+                        it.object3D.parent &&
+                        it.object3D.parent.visible
+                )
                 .map(it => it.object3D)
-                .concat(mo.building.floors)
-                .filter(it => it.visible),
-            false
         )
     }
-    return function(mo) {
-        mo.gestureControl.onClickListener = e => {
-            let intersects = intersectObjects('click', mo, e)
-            if (!intersects || intersects.length === 0) {
-                return
-            }
-            let overlay,
-                fo = intersects.filter(it => it.object.isFloor || (it.object.handler && it.object.handler.isOverlay))
-            if (fo[0] && fo[0].object.handler && fo[0].object.handler.isOverlay) {
-                overlay = fo[0].object.handler
-                fo[0].object.handler.dispatchEvent({ type: 'click', message: { overlay, domEvent: e } })
-            }
-            if (mo.hasEventListener('click')) {
-                let floor = intersects.filter(it => it.object.isFloor)[0]
-                if (floor) {
-                    mo.dispatchEvent({
-                        type: 'click',
-                        message: {
-                            x: Math.round(floor.point.x),
-                            y: -Math.round(floor.point.z),
-                            floor: floor.object.handler.name,
-                            overlay,
-                            domEvent: e,
-                        },
-                    })
-                }
-            }
-        }
-        mo.gestureControl.onHoverListener = e => {
-            let intersects = intersectObjects('hover', mo, e)
-            if (!intersects || intersects.length === 0) {
-                return
-            }
-            let overlay,
-                preHover = __preHover__.get(this),
-                fo = intersects.filter(it => it.object.isFloor || (it.object.handler && it.object.handler.isOverlay))
-            if (fo[0] && fo[0].object.handler && fo[0].object.handler.isOverlay) {
-                overlay = fo[0].object.handler
-            }
-            if (preHover != overlay) {
-                overlay && overlay.dispatchEvent({ type: 'hover', message: { overlay, domEvent: e, hovered: true } })
-                preHover && preHover.dispatchEvent({ type: 'hover', message: { overlay, domEvent: e, hovered: false } })
-            }
-            if (mo.hasEventListener('hover')) {
-                let floor = intersects.filter(it => it.object.isFloor)[0]
-                if (floor) {
-                    mo.dispatchEvent({
-                        type: 'hover',
-                        message: {
-                            x: Math.round(floor.point.x),
-                            y: -Math.round(floor.point.z),
-                            floor: floor.object.handler.name,
-                            overlay,
-                            domEvent: e,
-                        },
-                    })
-                }
-            }
+    objects = objects.filter(it => it.visible)
+
+    let raycaster = getCameraRaycast(mo, mouse)
+    return raycaster.intersectObjects(objects, false)
+}
+
+function pickOverlay(intersects) {
+    let overlays = intersects.filter(it => it.object.handler && it.object.handler.isOverlay)
+    let fronts = overlays.filter(it => !it.object.material.depthTest)
+    let floor = intersects.find(it => it.object.isFloor)
+    let overlay
+    if (fronts.length > 0) {
+        overlay = fronts[0]
+    } else if (overlays.length > 0) {
+        overlay = !floor || floor.distance + 1 > overlays[0].distance ? overlays[0] : undefined
+    }
+    if (overlay) {
+        overlay = overlay.object.handler
+    }
+    return overlay
+}
+
+function dispatchMapEvent(mo, type, e, intersects, overlay) {
+    if (mo.hasEventListener(type)) {
+        let floor = intersects.filter(it => it.object.isFloor)[0]
+        if (floor) {
+            mo.dispatchEvent({
+                type,
+                message: {
+                    x: Math.round(floor.point.x),
+                    y: Math.round(floor.point.y),
+                    floor: floor.object.handler.name,
+                    target: mo,
+                    currentTarget: overlay,
+                    domEvent: e,
+                },
+            })
         }
     }
-})()
+}
+
+export const initEvent = function(mo) {
+    mo.gestureControl.onClickListener = e => {
+        if (__pickMode__.get(mo) && e.button !== 0) return
+        let eventType = e.button === 0 ? 'click' : 'rightClick'
+        let intersects = intersectObjects(eventType, mo, e)
+        if (!intersects || intersects.length === 0) {
+            return
+        }
+        let overlay = pickOverlay(intersects)
+        if (overlay) {
+            overlay.dispatchEvent({ type: eventType, message: { target: overlay, domEvent: e } })
+        }
+
+        dispatchMapEvent(mo, eventType, e, intersects, overlay)
+    }
+    mo.gestureControl.onHoverListener = e => {
+        if (__pickMode__.get(mo)) return
+        let intersects = intersectObjects('hover', mo, e)
+        if (!intersects || intersects.length === 0) {
+            return
+        }
+        let overlay = pickOverlay(intersects)
+        let preHover = __preHover__.get(this)
+        if (preHover != overlay) {
+            overlay &&
+                overlay.dispatchEvent({ type: 'hover', message: { target: overlay, domEvent: e, hovered: true } })
+            preHover &&
+                preHover.dispatchEvent({ type: 'hover', message: { target: overlay, domEvent: e, hovered: false } })
+        }
+        dispatchMapEvent(mo, 'hover', e, intersects, overlay)
+    }
+}

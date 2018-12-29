@@ -5,7 +5,6 @@ export default {
         color: '#000000',
         opacity: 0.1,
         transparent: true,
-        depthTest: false,
     },
     floor: {
         color: '#e0e0e0',

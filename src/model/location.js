@@ -1,4 +1,4 @@
-import { Vector3 } from '../libs/threejs/three.module'
+import { Vector3 } from '../libs/threejs/index'
 
 class Location {
     constructor(floor, x, y, z = 0) {

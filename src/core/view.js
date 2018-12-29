@@ -8,7 +8,7 @@ import {
     AmbientLight,
     DirectionalLight,
     Raycaster,
-} from '../libs/threejs/three.module'
+} from '../libs/threejs/index'
 import { addEvent } from '../utils/event'
 import TWEEN from '../libs/Tween'
 
@@ -19,7 +19,7 @@ const __scene__ = new WeakMap()
 const __camera__ = new WeakMap()
 
 function updateModels(mo) {
-    if (mo.building) mo.building.boundNeedsUpdate = true
+    if (mo.mapScene) mo.mapScene.boundNeedsUpdate = true
     Array.from(mo._overlays)
         .filter(it => it.isHTMLOverlay)
         .map(it => ({
@@ -46,7 +46,7 @@ function updateModels(mo) {
 
 function render(mo) {
     requestAnimationFrame(() => render(mo))
-    if (!mo.building) return
+    if (!mo.mapScene) return
     TWEEN.update()
 
     let renderer = __renderer__.get(mo),
@@ -85,14 +85,14 @@ export function changeTheme(mo, theme) {
         }
         clearRenderer(mo, background, 1)
     }
-    mo.building && changeTheme(mo.building)
+    mo.mapScene && changeTheme(mo.mapScene)
 }
 
 export function viewMixin(XMap) {
     Object.assign(XMap.prototype, {
         clear() {
-            this.building && __scene__.get(this).remove(this.building)
-            this.building = null
+            this.mapScene && __scene__.get(this).remove(this.mapScene)
+            this.mapScene = null
             this.clearOverlays()
             __renderer__.get(this).clear()
         },
@@ -102,7 +102,7 @@ export function viewMixin(XMap) {
             const screenPosition = new Vector4()
             return function parseLocation(location) {
                 worldPosition.copy(location)
-                let floor = this.building && this.building.getFloor(location.floor)
+                let floor = this.mapScene && this.mapScene.getFloor(location.floor)
                 if (!floor) {
                     throw new Error('invalid floor')
                 }
@@ -151,13 +151,13 @@ function initLights(scene) {
     let light = new AmbientLight(0x747474)
     scene.add(light)
 
-    light = new DirectionalLight(0xadadad, 1.2)
+    light = new DirectionalLight(0x888888, 1.2)
     light.position.set(4000, 4000, 4000).normalize()
     light.target.position.set(0, 0, 0)
     scene.add(light)
 
     light = new DirectionalLight(0x333333)
-    light.position.set(-4000, 2000, -4000).normalize()
+    light.position.set(-4000, -4000, 4000).normalize()
     scene.add(light)
 }
 
@@ -169,7 +169,7 @@ function initThree(mo) {
     __scene__.set(mo, scene)
     initLights(scene)
 
-    let camera = new PerspectiveCamera(PERSPECTIVE_FOV, width / height, 140, 100000)
+    let camera = new PerspectiveCamera(PERSPECTIVE_FOV, width / height, 200, 50000)
     camera.spriteScale = 1 / (height / 2 / Math.tan((camera.fov / 2 / 180) * Math.PI))
     __camera__.set(mo, camera)
 
@@ -237,7 +237,7 @@ export function loadModel(mo, model) {
             value: mo,
         },
     })
-    mo.building = model
+    mo.mapScene = model
     let scene = __scene__.get(mo)
     scene.add(model)
 }
