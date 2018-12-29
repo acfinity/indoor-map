@@ -108,6 +108,7 @@ function dispatchMapEvent(mo, type, e, intersects, overlay) {
             mo.dispatchEvent({
                 type,
                 message: {
+                    type,
                     x: Math.round(floor.point.x),
                     y: Math.round(floor.point.y),
                     floor: floor.object.handler.name,

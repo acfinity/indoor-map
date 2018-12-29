@@ -174,7 +174,7 @@ class GestureControl {
                 return
             }
             if (this.state === STATE.RIGHT_CLICK || this.state === STATE.ROTATE) {
-                this.state = STATE.RIGHT_CLICK
+                this.state = STATE.ROTATE
                 this.rotateLeft(((360 * this.deltaVector.x) / PIXELS_PER_ROUND) * userRotateSpeed)
                 this.rotateUp(((360 * this.deltaVector.y) / PIXELS_PER_ROUND) * userRotateSpeed)
             } else if (this.state === STATE.ZOOM) {
