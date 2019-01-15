@@ -1,4 +1,4 @@
-import { Vector2, SpriteMaterial, TextureLoader, LinearFilter } from '../libs/threejs/index'
+import { Vector2, SpriteMaterial, TextureLoader, LinearFilter } from '../libs/threejs'
 import Overlay from './overlay'
 import XSprite from '../objects/XSprite'
 import TWEEN from '../libs/Tween'
@@ -35,7 +35,7 @@ function initObject3D(obj, location) {
         sprite.center.set(0.5, 0.5)
     }
     sprite.scale.set(1e-7, 1e-7, 1)
-    sprite.renderOrder = 20
+    sprite.renderOrder = 100
     sprite.onViewModeChange = is3dMode => sprite.position.setZ(is3dMode ? location.z : 4)
     return sprite
 }
@@ -47,7 +47,6 @@ class Marker extends Overlay {
         this.setOptions(options)
 
         this.currentLocation = location
-        this.location = location
         this.floor = location.floor
         this.position = location.localPosition
 
@@ -61,10 +60,11 @@ class Marker extends Overlay {
     }
 
     setOptions({ icon, size, offset }) {
+        let { icon: oldIcon } = __options__.get(this)
         if (typeof icon !== 'undefined') __options__.get(this).icon = icon
         if (typeof size !== 'undefined') __options__.get(this).size = size
         if (typeof offset !== 'undefined') __options__.get(this).offset = offset
-        if (this.object3D && icon) {
+        if (this.object3D && icon && icon !== oldIcon) {
             new TextureLoader().load(icon, t => {
                 t.needsUpdate = true
                 t.minFilter = LinearFilter
@@ -76,7 +76,7 @@ class Marker extends Overlay {
         }
     }
 
-    jump({ repeat = -1, duration = 1, delay = 0, height = 40 } = {}) {
+    jump({ repeat = -1, duration = 1000, delay = 0, height = 40 } = {}) {
         this.jumpStop()
         if (duration < 1e-3) {
             duration = 1
@@ -86,7 +86,6 @@ class Marker extends Overlay {
             height = 40
         }
         let revert = () => {
-            console.log(111111)
             let { offset } = __options__.get(this)
             if (this.object3D && offset) {
                 this.object3D.center.set(0.5 - offset.x / this.object3D.width, 0.5 + offset.y / this.object3D.height)
@@ -94,7 +93,7 @@ class Marker extends Overlay {
             this._animation_ = undefined
         }
         this._animation_ = new TWEEN.Tween(this.object3D.center)
-            .to({ y: -height / this.object3D.height }, (duration + delay) * 1000)
+            .to({ y: -height / this.object3D.height }, duration + delay)
             .easing(bounceEasing(3, 0.4, delay / (duration + delay)))
             .repeat(repeat > -1 ? repeat : Infinity)
             .onStop(revert)
@@ -111,6 +110,17 @@ class Marker extends Overlay {
     setLocation(location /*, animate*/) {
         this.currentLocation = location
         this.object3D.position.copy(location.localPosition)
+        let floor = this.object3D.parent
+        if (floor && floor.isFloor && floor.name != location.floor) {
+            let newFloor = floor.parent.getFloor(location.floor)
+            if (newFloor) {
+                floor.remove(this.object3D)
+                newFloor.add(this.object3D)
+            } else {
+                throw new Error('invalid floor')
+            }
+        }
+        if (this.$map) this.$map.needsUpdate = true
     }
 }
 

@@ -38,7 +38,7 @@ LineGeometry.prototype = Object.assign(Object.create(LineSegmentsGeometry.protot
     },
 
     setFromPoints: function(points) {
-        return this.setPositions(points.map(p => [p.x, p.y, p.z || 0]).flat())
+        return this.setPositions(points.reduce((acc, val) => acc.concat([val.x, val.y, val.z || 0]), []))
     },
 
     setColors: function(array) {

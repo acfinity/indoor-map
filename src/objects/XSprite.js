@@ -1,4 +1,4 @@
-import { Vector2, Vector3, Vector4, Matrix4, Sprite, Box2, Triangle } from '../libs/threejs/index'
+import { Vector2, Vector3, Vector4, Matrix4, Sprite, Box2, Triangle } from '../libs/threejs'
 
 class XSprite extends Sprite {
     constructor(...args) {
@@ -21,7 +21,11 @@ class XSprite extends Sprite {
 
     onBeforeRender(renderer, scene, camera) {
         if (this.width && this.height) {
-            this.scale.set(this.width * camera.spriteScale, this.height * camera.spriteScale, 1)
+            if (!this.material.sizeAttenuation) {
+                this.scale.set(this.width * camera.spriteScale, this.height * camera.spriteScale, 1)
+            } else {
+                this.scale.set(this.width, this.height, 1)
+            }
         } else {
             this.visible = false
         }

@@ -1,4 +1,4 @@
-import { Loader, FileLoader, TextureLoader, LinearFilter, SpriteMaterial } from '../libs/threejs/index'
+import { Loader, FileLoader, TextureLoader, LinearFilter, SpriteMaterial } from '../libs/threejs'
 import themeNormal from '../assets/theme/normal'
 
 class ThemeLoader extends Loader {

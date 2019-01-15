@@ -1,5 +1,5 @@
 import { addEvent, removeEvent } from '../utils/event'
-import { Vector2, Vector3, Plane, EventDispatcher } from '../libs/threejs/index'
+import { Vector2, Vector3, Plane, EventDispatcher } from '../libs/threejs'
 import { getCameraRaycast } from '../core/view'
 
 const STATE = {
@@ -70,6 +70,7 @@ class GestureControl {
 
     _initVars() {
         this.startPosition = new Vector2()
+        this.startPosition2 = new Vector2()
         this.endPosition = new Vector2()
         this.deltaVector = new Vector2()
         this.touchStartPoints = [new Vector2(), new Vector2(), new Vector2()]
@@ -106,7 +107,7 @@ class GestureControl {
         })
         eventType(window, 'mousemove', this)
         eventType(this.wrapper.parentElement, 'mousewheel', this)
-        eventType(window, 'contextmenu', this, false)
+        eventType(this.wrapper, 'contextmenu', this, false)
     }
 
     handleEvent(e) {
@@ -141,7 +142,6 @@ class GestureControl {
                 e.preventDefault()
                 break
         }
-        e.preventDefault()
     }
 
     _start(e) {
@@ -155,20 +155,25 @@ class GestureControl {
             } else if (e.button === 2) {
                 this.state = STATE.RIGHT_CLICK
             }
+            if (this.state !== STATE.NONE) this.wrapper.classList.add('grabbing')
         }
 
         const point = e.touches ? e.touches[0] : e
 
-        this.startPosition.set(point.pageX, point.pageY)
+        this.startPosition.set(point.offsetX, point.offsetY)
+        this.startPosition2.set(point.clientX, point.clientY)
     }
 
     _move(e) {
         if (!this.enabled) return
         if (this.state !== STATE.NONE) {
-            // e.preventDefault()
             const point = e.touches ? e.touches[0] : e
 
-            this.endPosition.set(point.pageX, point.pageY)
+            this.endPosition
+                .set(point.clientX, point.clientY)
+                .sub(this.startPosition2)
+                .add(this.startPosition)
+            this.startPosition2.set(point.clientX, point.clientY)
             this.deltaVector.subVectors(this.endPosition, this.startPosition)
             if (this.deltaVector.length() == 0) {
                 return
@@ -179,16 +184,17 @@ class GestureControl {
                 this.rotateUp(((360 * this.deltaVector.y) / PIXELS_PER_ROUND) * userRotateSpeed)
             } else if (this.state === STATE.ZOOM) {
                 if (this.deltaVector.y > 0) {
-                    this.$map.zoomIn()
+                    this.$map.zoomOut(1 / TOUCH_SCALE_STEP)
                 } else {
-                    this.$map.zoomOut()
+                    this.$map.zoomIn(TOUCH_SCALE_STEP)
                 }
             } else if (this.state === STATE.CLICK || this.state === STATE.PAN) {
                 this.state = STATE.PAN
                 this.pan(this.startPosition, this.endPosition)
             }
             this.startPosition.copy(this.endPosition)
-        } else if (this.onHoverListener && this.wrapper.contains(e.target)) {
+        }
+        if (this.onHoverListener && this.wrapper.contains(e.target)) {
             this.onHoverListener(e)
         }
     }
@@ -198,6 +204,7 @@ class GestureControl {
         if (this.state === STATE.NONE) return
         let state = this.state
         this.state = STATE.NONE
+        this.wrapper.classList.remove('grabbing')
         if ((state === STATE.CLICK || state === STATE.RIGHT_CLICK) && this.onClickListener) {
             this.onClickListener(e)
         }
@@ -206,6 +213,7 @@ class GestureControl {
     _wheel(e) {
         if (!this.enabled) return
         if (!this.scrollWheelZoomEnabled) return
+        if (this.state === STATE.ZOOM) return
 
         let delta = e.wheelDelta ? e.wheelDelta / 120 : -e.detail / 3
         let scale = Math.pow(SCALE_STEP, delta)
@@ -242,7 +250,6 @@ class GestureControl {
             } else {
                 this.$map.zoomOut(1 / TOUCH_SCALE_STEP)
             }
-            // } else if (this.state === STATE.ROTATE) {
         }
         this.touchEndPoints.forEach((p, i) => this.touchStartPoints[i].copy(p))
     }

@@ -1,5 +1,5 @@
+// import * as XMap from '../build/xmap.min'
 import * as XMap from '../src'
-// import * as XMap from '../src'
 import Stats from './stats.min'
 import { addEvent } from '../src/utils/event'
 
@@ -13,17 +13,32 @@ map.load('./data.json')
 window.map = map
 window.XMap = XMap
 
-let location = new XMap.Location('F1', 100, 0)
+let location = new XMap.Location('F1', 0, 0)
 var marker = new XMap.Marker(location, {
     icon: 'img/marker_red_sprite.png',
     size: new XMap.Point(19, 25),
     offset: new XMap.Point(0, -12.5),
 })
 marker.on('click', e => console.log(e))
+
+location = new XMap.Location('F1', 0, 0)
+let infoWindow = new XMap.HTMLInfoWindow(location, {
+    content: "it's an info window",
+})
+
+marker.on('hover', e => {
+    if (e.hovered) {
+        infoWindow.setLocation(marker.location)
+        infoWindow.setOptions({ offset: { x: 12, y: -27 }, content: 'hover marker' })
+        map.addOverlay(infoWindow)
+    } else {
+        map.removeOverlay(infoWindow)
+    }
+})
 window.marker = marker
 map.on('click', e => console.log(e))
-map.on('rightClick', e => console.log(e))
-marker.jump({ duration: 0.8, delay: 0.4 })
+marker.on('rightClick', e => console.log(e))
+// marker.jump({ duration: 800, delay: 400 })
 map.addOverlay(marker)
 
 let locations = [{ x: 400, y: 0 }, { x: 20, y: 400 }, { x: -400, y: 0 }, { x: 20, y: -400 }]
@@ -69,7 +84,7 @@ addEvent(document.getElementById('button-3d'), 'click', () => map.setViewMode(XM
 const stats = new Stats()
 stats.domElement.style.position = 'absolute'
 stats.domElement.style.top = '0'
-document.getElementsByTagName('body')[0].appendChild(stats.domElement)
+// document.getElementsByTagName('body')[0].appendChild(stats.domElement)
 
 function animate() {
     requestAnimationFrame(animate)

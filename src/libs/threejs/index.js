@@ -3,4 +3,4 @@ export { SpriteCanvasMaterial }
 
 export * from './three.module'
 
-export * from './line/index'
+export * from './line'

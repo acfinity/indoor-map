@@ -1,17 +1,60 @@
 import Overlay from './overlay'
 
 class HTMLOverlay extends Overlay {
-    constructor(location, options) {
+    constructor(location, options = {}) {
         super()
 
-        this.location = location
         this.options = options
-        
+
         if (typeof this.initialize !== 'function' || typeof this.render !== 'function') {
             throw new Error('initialize && render must be implements')
         }
-        this.$el = this.initialize()
+
+        Object.defineProperties(this, {
+            location: {
+                enumerable: true,
+                configurable: true,
+                value: location,
+            },
+            $el: {
+                configurable: false,
+                writable: false,
+                value: this.initialize(),
+            },
+        })
     }
+
+    setOptions(options = {}) {
+        this.options = { ...this.options, ...options }
+    }
+
+    setLocation(location) {
+        Object.defineProperties(this, {
+            location: {
+                enumerable: true,
+                configurable: true,
+                value: location,
+            },
+        })
+    }
+
+    // show() {
+    //     this.visible = true
+    // }
+
+    // hide() {
+    //     this.visible = false
+    // }
+
+    // get visible() {
+    //     return this.$el && this.$el.style.display !== 'none'
+    // }
+
+    // set visible(value) {
+    //     if (this.$el) {
+    //         this.$el.style.display = value ? 'block' : 'none'
+    //     }
+    // }
 }
 
 Object.defineProperties(HTMLOverlay.prototype, {

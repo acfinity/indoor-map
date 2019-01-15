@@ -1,4 +1,4 @@
-import { Vector2 } from '../libs/threejs/index'
+import { Vector2 } from '../libs/threejs'
 import SpriteCanvasMaterial from '../libs/threejs/materials/SpriteCanvasMaterial'
 import { mixinMapObject } from './map-object'
 import XSprite from '../objects/XSprite'

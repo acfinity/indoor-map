@@ -1,3 +1,18 @@
+.xmap-container {
+    overflow: hidden;
+    width: 100%;
+    height: 100%;
+    cursor: grab;
+}
+
+.xmap-container.grabbing {
+    cursor: grabbing;
+}
+
+.xmap-container.clickable, .xmap-container.picking {
+    cursor: pointer;
+}
+
 .xmap-controls, .xmap-overlays {
     width: 100%;
     height: 100%;
@@ -6,6 +21,14 @@
     top: 0;
     pointer-events: none;
     overflow: hidden;
+}
+
+.xmap-controls {
+    z-index: 2;
+}
+
+.xmap-overlays {
+    z-index: 1;
 }
 
 .xmap-controls *, .xmap-overlays * {
@@ -35,6 +58,7 @@
     -ms-user-select: none;
     -webkit-user-select: none;
     user-select: none;
+    cursor: pointer;
 }
 
 .xmap-floor-control li:last-child {

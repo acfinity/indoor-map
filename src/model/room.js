@@ -17,7 +17,7 @@ import {
     DoubleSide,
     // LinearFilter,
     // RepeatWrapping,
-} from '../libs/threejs/index'
+} from '../libs/threejs'
 import { mixinMapObject } from './map-object'
 import { parsePoints } from '../utils/view'
 import Label from './label'

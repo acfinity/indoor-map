@@ -1,4 +1,4 @@
-import { Path, Shape, Mesh, ExtrudeBufferGeometry, ShapeGeometry, MeshLambertMaterial } from '../libs/threejs/index'
+import { Path, Shape, Mesh, ExtrudeBufferGeometry, ShapeGeometry, MeshLambertMaterial } from '../libs/threejs'
 import { mixinMapObject } from './map-object'
 import Room from './room'
 import PubPoint from './pub-point'

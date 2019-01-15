@@ -1,4 +1,4 @@
-import { Loader, FileLoader } from '../libs/threejs/index'
+import { Loader, FileLoader } from '../libs/threejs'
 import MapScene from '../model/map-scene'
 
 class MapLoader extends Loader {

@@ -1,4 +1,4 @@
-import { Vector3 } from '../libs/threejs/index'
+import { Vector3 } from '../libs/threejs'
 import { ViewMode } from '../constants'
 import TWEEN from '../libs/Tween'
 
@@ -101,15 +101,15 @@ function _transform_(mo, name, value, duration, callback) {
 
 export function stateMixin(XMap) {
     Object.assign(XMap.prototype, {
-        // reset() {
-        //     let state = __mapState__.get(this)
-        //     let resetState = __mapStateReset__.get(this)
-        //     Object.entries(resetState).forEach(([k, v]) => (state[k] = v))
+        reset() {
+            let state = __mapState__.get(this)
+            let resetState = __mapStateReset__.get(this)
+            Object.entries(resetState).forEach(([k, v]) => (state[k] = v))
 
-        //     __mapState__.get(this).needsUpdate = true
+            __mapState__.get(this).needsUpdate = true
 
-        //     this.dispatchEvent({ type: 'stateChanged' })
-        // },
+            this.dispatchEvent({ type: 'stateChanged' })
+        },
 
         setViewMode(mode) {
             if ((mode !== ViewMode.MODE_2D && mode !== ViewMode.MODE_3D) || mode === __mapState__.get(this).viewMode) {
@@ -220,8 +220,23 @@ export function stateMixin(XMap) {
         },
 
         setFloor(floor) {
-            this.mapScene.showFloor(floor)
-            __mapState__.get(this).needsUpdate = true
+            let state = __mapState__.get(this)
+            let before = __animationList__.get(this).get('floor')
+            if (before) {
+                before.stop()
+                __animationList__.get(this).delete('floor')
+            }
+            let animation = this.mapScene.showFloor(floor)
+            if (animation) {
+                animation
+                    .onComplete(() => {
+                        state.needsUpdate = true
+                        __animationList__.get(this).delete('floor')
+                    })
+                    .start()
+                __animationList__.get(this).set('floor', animation)
+            }
+            state.needsUpdate = true
 
             this.dispatchEvent({ type: 'floorChanged', message: floor })
         },
@@ -235,7 +250,7 @@ export function stateMixin(XMap) {
         },
 
         _scale_(scalar) {
-            let scale = __mapState__.get(this).scale * scalar 
+            let scale = __mapState__.get(this).scale * scalar
             scale = Math.min(MAX_SCALE, Math.max(MIN_SCALE, scale))
             __mapState__.get(this).scale = scale
             __mapState__.get(this).needsUpdate = true
@@ -302,6 +317,9 @@ export function stateMixin(XMap) {
             get: function() {
                 let { needsUpdate = true } = __mapState__.get(this)
                 return needsUpdate || __animationList__.get(this).size > 0
+            },
+            set: function(value) {
+                __mapState__.get(this).needsUpdate = !!value
             },
         },
         currentFloor: {

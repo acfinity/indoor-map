@@ -1,4 +1,4 @@
-import { Mesh, Shape, ExtrudeBufferGeometry, Vector2 } from '../libs/threejs/index'
+import { Mesh, Shape, ExtrudeBufferGeometry, Vector2 } from '../libs/threejs'
 import { mixinMapObject } from './map-object'
 import Floor from './floor'
 import TWEEN from '../libs/Tween'
@@ -17,6 +17,7 @@ class MapScene extends Mesh {
             floorSize = floors.length,
         } = attr
         this.info = building
+        this.name = building.name
         if (
             groundFloors < 0 ||
             underFloors < 0 ||
@@ -70,9 +71,6 @@ class MapScene extends Mesh {
     onThemeChange() {}
 
     showFloor(floorNum) {
-        if (floorNum > this.groundFloor || floorNum < -this.underFloor || floorNum === 0) {
-            throw new Error('Invalid floor number.')
-        }
         let current = this.getFloor(this.currentFloorNum)
         let target = this.getFloor(floorNum)
         if (current == target) {
@@ -86,11 +84,11 @@ class MapScene extends Mesh {
         }
 
         let index = this.children.filter(obj => obj.isFloor).findIndex(it => it === target)
-        new TWEEN.Tween(this.position)
+        let animation = new TWEEN.Tween(this.position)
             .to({ z: -index * FLOOR_SPACE }, current != null ? 150 : 0)
-            .onComplete(() => (this.boundNeedsUpdate = true))
             .start()
         this._updateDepthTest_()
+        return animation
     }
 
     showAllFloors() {

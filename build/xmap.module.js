@@ -1,3 +1,25 @@
+function updateHTMLOverlay(mo, overlay) {
+    let position = mo.locationToViewport(overlay.location);
+    if (position.distance === Infinity) {
+        overlay.render({
+            visible: false,
+        });
+    } else {
+        overlay.render({
+            x: position.x,
+            y: position.y,
+            zIndex: -Math.round(position.distance),
+            visible: true,
+        });
+    }
+}
+
+function updateOverlays(mo) {
+    Array.from(mo._overlays)
+        .filter(it => it.isHTMLOverlay)
+        .forEach(it => updateHTMLOverlay(mo, it));
+}
+
 function overlayMixin(XMap) {
     Object.assign(XMap.prototype, {
         addOverlay(overlay) {
@@ -14,12 +36,24 @@ function overlayMixin(XMap) {
         },
 
         _addOverlay(overlay) {
-            if (this.building) {
+            if (this.mapScene) {
                 if (overlay.isHTMLOverlay) {
+                    overlay.$el.remove();
+                    overlay._location = overlay.location;
+                    let vm = this;
+                    Object.defineProperty(overlay, 'location', {
+                        set(v) {
+                            this._location = v;
+                            updateHTMLOverlay(vm, overlay);
+                        },
+                        get() {
+                            return this._location
+                        },
+                    });
                     this.$overlayWrapper.appendChild(overlay.$el);
-                    overlay.render(this.locationToViewport(overlay.location));
-                } else {
-                    let floorObj = this.building.getFloor(overlay.floor);
+                    updateHTMLOverlay(this, overlay);
+                } else if (overlay.isOverlay && overlay.object3D) {
+                    let floorObj = this.mapScene.getFloor(overlay.floor);
                     if (floorObj) {
                         floorObj.add(overlay.object3D);
                     } else {
@@ -31,7 +65,11 @@ function overlayMixin(XMap) {
 
         _removeOverlays(overlays) {
             overlays.forEach(overlay => {
-                overlay.removeFromParent();
+                if (overlay.isHTMLOverlay) {
+                    overlay.$el.remove();
+                } else {
+                    overlay.removeFromParent();
+                }
                 this._overlays.delete(overlay);
             });
         },
@@ -6447,6 +6485,10 @@ function mergeUniforms( uniforms ) {
 	return merged;
 
 }
+
+// Legacy
+
+var UniformsUtils = { clone: cloneUniforms, merge: mergeUniforms };
 
 /**
  * @author mrdoob / http://mrdoob.com/
@@ -46861,6 +46903,882 @@ ImageUtils.loadCompressedTextureCube = function () {
 
 };
 
+const __needsUpdate__ = new Map();
+const canvasScale = 2;
+
+class SpriteCanvasMaterial extends SpriteMaterial {
+    constructor(options) {
+        let canvas = document.createElement('canvas');
+        let texture = new Texture(canvas);
+        texture.minFilter = LinearFilter;
+        let { measure, compile } = options;
+        delete options.measure;
+        delete options.compile;
+        super({
+            sizeAttenuation: false,
+            transparent: true,
+            alphaTest: 0.1,
+            ...options,
+            map: texture,
+        });
+
+        this.measure = measure;
+        this.compile = compile;
+
+        this.needsUpdate = true;
+    }
+
+    set needsUpdate(value) {
+        __needsUpdate__.set(this, value);
+        if (value && this.map) {
+            let canvas = this.map.image;
+            canvas.width = 512;
+            canvas.height = 512;
+            let size = this.measure(canvas.getContext('2d'));
+            canvas.width = Math.ceil(size.width * canvasScale);
+            canvas.height = Math.ceil(size.height * canvasScale);
+            let context = canvas.getContext('2d');
+            this.compile(context, canvasScale);
+            this.map.needsUpdate = true;
+        }
+    }
+
+    get needsUpdate() {
+        return __needsUpdate__.get(this)
+    }
+
+    get width() {
+        return this.map.image.width / canvasScale
+    }
+
+    get height() {
+        return this.map.image.height / canvasScale
+    }
+}
+
+/**
+ * @author WestLangley / http://github.com/WestLangley
+ *
+ */
+
+function LineSegmentsGeometry() {
+    InstancedBufferGeometry.call(this);
+
+    this.type = 'LineSegmentsGeometry';
+
+    var plane = new BufferGeometry();
+
+    var positions = [-1, 2, 0, 1, 2, 0, -1, 1, 0, 1, 1, 0, -1, 0, 0, 1, 0, 0, -1, -1, 0, 1, -1, 0];
+    var uvs = [-1, 2, 1, 2, -1, 1, 1, 1, -1, -1, 1, -1, -1, -2, 1, -2];
+    var index = [0, 2, 1, 2, 3, 1, 2, 4, 3, 4, 5, 3, 4, 6, 5, 6, 7, 5];
+
+    this.setIndex(index);
+    this.addAttribute('position', new Float32BufferAttribute(positions, 3));
+    this.addAttribute('uv', new Float32BufferAttribute(uvs, 2));
+}
+
+LineSegmentsGeometry.prototype = Object.assign(Object.create(InstancedBufferGeometry.prototype), {
+    constructor: LineSegmentsGeometry,
+
+    isLineSegmentsGeometry: true,
+
+    applyMatrix: function(matrix) {
+        var start = this.attributes.instanceStart;
+        var end = this.attributes.instanceEnd;
+
+        if (start !== undefined) {
+            matrix.applyToBufferAttribute(start);
+
+            matrix.applyToBufferAttribute(end);
+
+            start.data.needsUpdate = true;
+        }
+
+        if (this.boundingBox !== null) {
+            this.computeBoundingBox();
+        }
+
+        if (this.boundingSphere !== null) {
+            this.computeBoundingSphere();
+        }
+
+        return this
+    },
+
+    setPositions: function(array) {
+        var lineSegments;
+
+        if (array instanceof Float32Array) {
+            lineSegments = array;
+        } else if (Array.isArray(array)) {
+            lineSegments = new Float32Array(array);
+        }
+
+        var instanceBuffer = new InstancedInterleavedBuffer(lineSegments, 6, 1); // xyz, xyz
+
+        this.addAttribute('instanceStart', new InterleavedBufferAttribute(instanceBuffer, 3, 0)); // xyz
+        this.addAttribute('instanceEnd', new InterleavedBufferAttribute(instanceBuffer, 3, 3)); // xyz
+
+        //
+
+        this.computeBoundingBox();
+        this.computeBoundingSphere();
+
+        return this
+    },
+
+    setColors: function(array) {
+        var colors;
+
+        if (array instanceof Float32Array) {
+            colors = array;
+        } else if (Array.isArray(array)) {
+            colors = new Float32Array(array);
+        }
+
+        var instanceColorBuffer = new InstancedInterleavedBuffer(colors, 6, 1); // rgb, rgb
+
+        this.addAttribute('instanceColorStart', new InterleavedBufferAttribute(instanceColorBuffer, 3, 0)); // rgb
+        this.addAttribute('instanceColorEnd', new InterleavedBufferAttribute(instanceColorBuffer, 3, 3)); // rgb
+
+        return this
+    },
+
+    fromWireframeGeometry: function(geometry) {
+        this.setPositions(geometry.attributes.position.array);
+
+        return this
+    },
+
+    fromEdgesGeometry: function(geometry) {
+        this.setPositions(geometry.attributes.position.array);
+
+        return this
+    },
+
+    fromMesh: function(mesh) {
+        this.fromWireframeGeometry(new WireframeGeometry(mesh.geometry));
+
+        // set colors, maybe
+
+        return this
+    },
+
+    fromLineSegements: function(lineSegments) {
+        var geometry = lineSegments.geometry;
+
+        if (geometry.isGeometry) {
+            this.setPositions(geometry.vertices);
+        } else if (geometry.isBufferGeometry) {
+            this.setPositions(geometry.position.array); // assumes non-indexed
+        }
+
+        // set colors, maybe
+
+        return this
+    },
+
+    computeBoundingBox: (function() {
+        var box = new Box3();
+
+        return function computeBoundingBox() {
+            if (this.boundingBox === null) {
+                this.boundingBox = new Box3();
+            }
+
+            var start = this.attributes.instanceStart;
+            var end = this.attributes.instanceEnd;
+
+            if (start !== undefined && end !== undefined) {
+                this.boundingBox.setFromBufferAttribute(start);
+
+                box.setFromBufferAttribute(end);
+
+                this.boundingBox.union(box);
+            }
+        }
+    })(),
+
+    computeBoundingSphere: (function() {
+        var vector = new Vector3();
+
+        return function computeBoundingSphere() {
+            if (this.boundingSphere === null) {
+                this.boundingSphere = new Sphere();
+            }
+
+            if (this.boundingBox === null) {
+                this.computeBoundingBox();
+            }
+
+            var start = this.attributes.instanceStart;
+            var end = this.attributes.instanceEnd;
+
+            if (start !== undefined && end !== undefined) {
+                var center = this.boundingSphere.center;
+
+                this.boundingBox.getCenter(center);
+
+                var maxRadiusSq = 0;
+
+                for (var i = 0, il = start.count; i < il; i++) {
+                    vector.fromBufferAttribute(start, i);
+                    maxRadiusSq = Math.max(maxRadiusSq, center.distanceToSquared(vector));
+
+                    vector.fromBufferAttribute(end, i);
+                    maxRadiusSq = Math.max(maxRadiusSq, center.distanceToSquared(vector));
+                }
+
+                this.boundingSphere.radius = Math.sqrt(maxRadiusSq);
+
+                if (isNaN(this.boundingSphere.radius)) {
+                    console.error(
+                        'THREE.LineSegmentsGeometry.computeBoundingSphere(): Computed radius is NaN. The instanced position data is likely to have NaN values.',
+                        this
+                    );
+                }
+            }
+        }
+    })(),
+
+    toJSON: function() {
+        // todo
+    },
+
+    clone: function() {
+        // todo
+    },
+
+    copy: function(source) {
+        // todo
+
+        return this
+    },
+});
+
+/**
+ * @author WestLangley / http://github.com/WestLangley
+ *
+ */
+
+function LineGeometry() {
+    LineSegmentsGeometry.call(this);
+
+    this.type = 'LineGeometry';
+}
+
+LineGeometry.prototype = Object.assign(Object.create(LineSegmentsGeometry.prototype), {
+    constructor: LineGeometry,
+
+    isLineGeometry: true,
+
+    setPositions: function(array) {
+        // converts [ x1, y1, z1,  x2, y2, z2, ... ] to pairs format
+
+        var length = array.length - 3;
+        var points = new Float32Array(2 * length);
+
+        for (var i = 0; i < length; i += 3) {
+            points[2 * i] = array[i];
+            points[2 * i + 1] = array[i + 1];
+            points[2 * i + 2] = array[i + 2];
+
+            points[2 * i + 3] = array[i + 3];
+            points[2 * i + 4] = array[i + 4];
+            points[2 * i + 5] = array[i + 5];
+        }
+
+        LineSegmentsGeometry.prototype.setPositions.call(this, points);
+
+        return this
+    },
+
+    setFromPoints: function(points) {
+        return this.setPositions(points.reduce((acc, val) => acc.concat([val.x, val.y, val.z || 0]), []))
+    },
+
+    setColors: function(array) {
+        // converts [ r1, g1, b1,  r2, g2, b2, ... ] to pairs format
+
+        var length = array.length - 3;
+        var colors = new Float32Array(2 * length);
+
+        for (var i = 0; i < length; i += 3) {
+            colors[2 * i] = array[i];
+            colors[2 * i + 1] = array[i + 1];
+            colors[2 * i + 2] = array[i + 2];
+
+            colors[2 * i + 3] = array[i + 3];
+            colors[2 * i + 4] = array[i + 4];
+            colors[2 * i + 5] = array[i + 5];
+        }
+
+        LineSegmentsGeometry.prototype.setColors.call(this, colors);
+
+        return this
+    },
+
+    fromLine: function(line) {
+        var geometry = line.geometry;
+
+        if (geometry.isGeometry) {
+            this.setPositions(geometry.vertices);
+        } else if (geometry.isBufferGeometry) {
+            this.setPositions(geometry.position.array); // assumes non-indexed
+        }
+
+        // set colors, maybe
+
+        return this
+    },
+
+    copy: function(source) {
+        // todo
+
+        return this
+    },
+});
+
+/**
+ * @author WestLangley / http://github.com/WestLangley
+ *
+ * parameters = {
+ *  color: <hex>,
+ *  lineWidth: <float>,
+ *  dashed: <boolean>,
+ *  dashScale: <float>,
+ *  dashSize: <float>,
+ *  gapSize: <float>,
+ *  resolution: <Vector2>, // to be set by renderer
+ * }
+ */
+
+UniformsLib.line = {
+    lineWidth: { value: 1 },
+    resolution: { value: new Vector2(1, 1) },
+    dashScale: { value: 1 },
+    dashSize: { value: 1 },
+    gapSize: { value: 1 }, // todo FIX - maybe change to totalSize
+    dashOffset: { value: 0 },
+};
+
+ShaderLib['line'] = {
+    uniforms: UniformsUtils.merge([UniformsLib.common, UniformsLib.fog, UniformsLib.line]),
+
+    vertexShader: `
+		#include <common>
+		#include <color_pars_vertex>
+		#include <fog_pars_vertex>
+		#include <logdepthbuf_pars_vertex>
+		#include <clipping_planes_pars_vertex>
+
+		uniform float lineWidth;
+		uniform vec2 resolution;
+
+		attribute vec3 instanceStart;
+		attribute vec3 instanceEnd;
+
+		attribute vec3 instanceColorStart;
+		attribute vec3 instanceColorEnd;
+
+		varying vec2 vUv;
+
+		#ifdef USE_DASH
+
+			uniform float dashScale;
+			attribute float instanceDistanceStart;
+			attribute float instanceDistanceEnd;
+			varying float vLineDistance;
+
+		#endif
+
+		void trimSegment( const in vec4 start, inout vec4 end ) {
+
+			// trim end segment so it terminates between the camera plane and the near plane
+
+			// conservative estimate of the near plane
+			float a = projectionMatrix[ 2 ][ 2 ]; // 3nd entry in 3th column
+			float b = projectionMatrix[ 3 ][ 2 ]; // 3nd entry in 4th column
+			float nearEstimate = - 0.5 * b / a;
+
+			float alpha = ( nearEstimate - start.z ) / ( end.z - start.z );
+
+			end.xyz = mix( start.xyz, end.xyz, alpha );
+
+		}
+
+		void main() {
+
+			#ifdef USE_COLOR
+
+				vColor.xyz = ( position.y < 0.5 ) ? instanceColorStart : instanceColorEnd;
+
+			#endif
+
+			#ifdef USE_DASH
+
+				vLineDistance = ( position.y < 0.5 ) ? dashScale * instanceDistanceStart : dashScale * instanceDistanceEnd;
+
+			#endif
+
+			float aspect = resolution.x / resolution.y;
+
+			vUv = uv;
+
+			// camera space
+			vec4 start = modelViewMatrix * vec4( instanceStart, 1.0 );
+			vec4 end = modelViewMatrix * vec4( instanceEnd, 1.0 );
+
+			// special case for perspective projection, and segments that terminate either in, or behind, the camera plane
+			// clearly the gpu firmware has a way of addressing this issue when projecting into ndc space
+			// but we need to perform ndc-space calculations in the shader, so we must address this issue directly
+			// perhaps there is a more elegant solution -- WestLangley
+
+			bool perspective = ( projectionMatrix[ 2 ][ 3 ] == - 1.0 ); // 4th entry in the 3rd column
+
+			if ( perspective ) {
+
+				if ( start.z < 0.0 && end.z >= 0.0 ) {
+
+					trimSegment( start, end );
+
+				} else if ( end.z < 0.0 && start.z >= 0.0 ) {
+
+					trimSegment( end, start );
+
+				}
+
+			}
+
+			// clip space
+			vec4 clipStart = projectionMatrix * start;
+			vec4 clipEnd = projectionMatrix * end;
+
+			// ndc space
+			vec2 ndcStart = clipStart.xy / clipStart.w;
+			vec2 ndcEnd = clipEnd.xy / clipEnd.w;
+
+			// direction
+			vec2 dir = ndcEnd - ndcStart;
+
+			// account for clip-space aspect ratio
+			dir.x *= aspect;
+			dir = normalize( dir );
+
+			// perpendicular to dir
+			vec2 offset = vec2( dir.y, - dir.x );
+
+			// undo aspect ratio adjustment
+			dir.x /= aspect;
+			offset.x /= aspect;
+
+			// sign flip
+			if ( position.x < 0.0 ) offset *= - 1.0;
+
+			// endcaps
+			if ( position.y < 0.0 ) {
+
+				offset += - dir;
+
+			} else if ( position.y > 1.0 ) {
+
+				offset += dir;
+
+			}
+
+			// adjust for lineWidth
+			offset *= lineWidth;
+
+			// adjust for clip-space to screen-space conversion // maybe resolution should be based on viewport ...
+			offset /= resolution.y;
+
+			// select end
+			vec4 clip = ( position.y < 0.5 ) ? clipStart : clipEnd;
+
+			// back to clip space
+			offset *= clip.w;
+
+			clip.xy += offset;
+
+			gl_Position = clip;
+
+			vec4 mvPosition = ( position.y < 0.5 ) ? start : end; // this is an approximation
+
+			#include <logdepthbuf_vertex>
+			#include <clipping_planes_vertex>
+			#include <fog_vertex>
+
+		}
+		`,
+
+    fragmentShader: `
+		uniform vec3 diffuse;
+		uniform float opacity;
+
+		#ifdef USE_DASH
+
+			uniform float dashSize;
+			uniform float gapSize;
+
+		#endif
+
+		varying float vLineDistance;
+
+		#include <common>
+		#include <color_pars_fragment>
+		#include <fog_pars_fragment>
+		#include <logdepthbuf_pars_fragment>
+		#include <clipping_planes_pars_fragment>
+
+		varying vec2 vUv;
+
+		void main() {
+
+			#include <clipping_planes_fragment>
+
+			#ifdef USE_DASH
+
+				if ( vUv.y < - 1.0 || vUv.y > 1.0 ) discard; // discard endcaps
+				
+				float totalSize = dashSize + gapSize;
+				if ( mod( vLineDistance - totalSize * dashOffset, totalSize ) > dashSize ) discard; // todo - FIX
+
+			#endif
+
+			if ( abs( vUv.y ) > 1.0 ) {
+
+				float a = vUv.x;
+				float b = ( vUv.y > 0.0 ) ? vUv.y - 1.0 : vUv.y + 1.0;
+				float len2 = a * a + b * b;
+
+				if ( len2 > 1.0 ) discard;
+
+			}
+
+			vec4 diffuseColor = vec4( diffuse, opacity );
+
+			#include <logdepthbuf_fragment>
+			#include <color_fragment>
+
+			gl_FragColor = vec4( diffuseColor.rgb, diffuseColor.a );
+
+			#include <premultiplied_alpha_fragment>
+			#include <tonemapping_fragment>
+			#include <encodings_fragment>
+			#include <fog_fragment>
+
+		}
+		`,
+};
+
+function LineMaterial(parameters) {
+    ShaderMaterial.call(this, {
+        type: 'LineMaterial',
+
+        uniforms: UniformsUtils.clone(ShaderLib['line'].uniforms),
+
+        vertexShader: ShaderLib['line'].vertexShader,
+        fragmentShader: ShaderLib['line'].fragmentShader,
+    });
+
+    this.dashed = false;
+
+    Object.defineProperties(this, {
+        color: {
+            enumerable: true,
+
+            get: function() {
+                return this.uniforms.diffuse.value
+            },
+
+            set: function(value) {
+                this.uniforms.diffuse.value = value;
+            },
+        },
+
+        lineWidth: {
+            enumerable: true,
+
+            get: function() {
+                return this.uniforms.lineWidth.value
+            },
+
+            set: function(value) {
+                this.uniforms.lineWidth.value = value;
+            },
+        },
+
+        dashed: {
+            enumerable: true,
+
+            get: function() {
+                return typeof this.defines.USE_DASH !== 'undefined'
+            },
+
+            set: function(value) {
+                if (value) this.defines.USE_DASH = '';
+                else delete this.defines.USE_DASH;
+            },
+        },
+
+        dashScale: {
+            enumerable: true,
+
+            get: function() {
+                return this.uniforms.dashScale.value
+            },
+
+            set: function(value) {
+                this.uniforms.dashScale.value = value;
+            },
+        },
+
+        dashSize: {
+            enumerable: true,
+
+            get: function() {
+                return this.uniforms.dashSize.value
+            },
+
+            set: function(value) {
+                this.uniforms.dashSize.value = value;
+            },
+        },
+
+        gapSize: {
+            enumerable: true,
+
+            get: function() {
+                return this.uniforms.gapSize.value
+            },
+
+            set: function(value) {
+                this.uniforms.gapSize.value = value;
+            },
+        },
+
+        dashOffset: {
+            enumerable: true,
+
+            get: function() {
+                return this.uniforms.dashOffset.value
+            },
+
+            set: function(value) {
+                this.uniforms.dashOffset.value = value;
+            },
+        },
+
+        resolution: {
+            enumerable: true,
+
+            get: function() {
+                return this.uniforms.resolution.value
+            },
+
+            set: function(value) {
+                this.uniforms.resolution.value.copy(value);
+            },
+        },
+    });
+
+    this.setValues(parameters);
+}
+
+LineMaterial.prototype = Object.create(ShaderMaterial.prototype);
+LineMaterial.prototype.constructor = LineMaterial;
+
+LineMaterial.prototype.isLineMaterial = true;
+
+LineMaterial.prototype.copy = function(source) {
+    ShaderMaterial.prototype.copy.call(this, source);
+
+    this.color.copy(source.color);
+
+    this.lineWidth = source.lineWidth;
+
+    this.resolution = source.resolution;
+
+    // todo
+
+    return this
+};
+
+/**
+ * @author WestLangley / http://github.com/WestLangley
+ *
+ */
+
+function LineSegments2(geometry, material) {
+    Mesh.call(this);
+
+    this.type = 'LineSegments2';
+
+    this.geometry = geometry !== undefined ? geometry : new LineSegmentsGeometry();
+    this.material = material !== undefined ? material : new LineMaterial({ color: Math.random() * 0xffffff });
+}
+
+LineSegments2.prototype = Object.assign(Object.create(Mesh.prototype), {
+    constructor: LineSegments2,
+
+    isLineSegments2: true,
+
+    computeLineDistances: (function() {
+        // for backwards-compatability, but could be a method of LineSegmentsGeometry...
+
+        var start = new Vector3();
+        var end = new Vector3();
+
+        return function computeLineDistances() {
+            var geometry = this.geometry;
+
+            var instanceStart = geometry.attributes.instanceStart;
+            var instanceEnd = geometry.attributes.instanceEnd;
+            var lineDistances = new Float32Array(2 * instanceStart.data.count);
+
+            for (var i = 0, j = 0, l = instanceStart.data.count; i < l; i++, j += 2) {
+                start.fromBufferAttribute(instanceStart, i);
+                end.fromBufferAttribute(instanceEnd, i);
+
+                lineDistances[j] = j === 0 ? 0 : lineDistances[j - 1];
+                lineDistances[j + 1] = lineDistances[j] + start.distanceTo(end);
+            }
+
+            var instanceDistanceBuffer = new InstancedInterleavedBuffer(lineDistances, 2, 1); // d0, d1
+
+            geometry.addAttribute('instanceDistanceStart', new InterleavedBufferAttribute(instanceDistanceBuffer, 1, 0)); // d0
+            geometry.addAttribute('instanceDistanceEnd', new InterleavedBufferAttribute(instanceDistanceBuffer, 1, 1)); // d1
+
+            return this
+        }
+    })(),
+
+    copy: function(source) {
+        // todo
+
+        return this
+    },
+});
+
+/**
+ * @author WestLangley / http://github.com/WestLangley
+ *
+ */
+
+function Line2(geometry, material) {
+    LineSegments2.call(this);
+
+    this.type = 'Line2';
+
+    this.geometry = geometry !== undefined ? geometry : new LineGeometry();
+    this.material = material !== undefined ? material : new LineMaterial({ color: Math.random() * 0xffffff });
+}
+
+Line2.prototype = Object.assign(Object.create(LineSegments2.prototype), {
+    constructor: Line2,
+
+    isLine2: true,
+
+    copy: function(source) {
+        // todo
+
+        return this
+    },
+
+    onBeforeRender: function(renderer) {
+        let size = renderer.getSize();
+        this.material.resolution.set(size.width, size.height);
+    },
+});
+
+/**
+ * @author WestLangley / http://github.com/WestLangley
+ *
+ */
+
+function Wireframe(geometry, material) {
+    Mesh.call(this);
+
+    this.type = 'Wireframe';
+
+    this.geometry = geometry !== undefined ? geometry : new LineSegmentsGeometry();
+    this.material = material !== undefined ? material : new LineMaterial({ color: Math.random() * 0xffffff });
+}
+
+Wireframe.prototype = Object.assign(Object.create(Mesh.prototype), {
+    constructor: Wireframe,
+
+    isWireframe: true,
+
+    computeLineDistances: (function() {
+        // for backwards-compatability, but could be a method of LineSegmentsGeometry...
+
+        var start = new Vector3();
+        var end = new Vector3();
+
+        return function computeLineDistances() {
+            var geometry = this.geometry;
+
+            var instanceStart = geometry.attributes.instanceStart;
+            var instanceEnd = geometry.attributes.instanceEnd;
+            var lineDistances = new Float32Array(2 * instanceStart.data.count);
+
+            for (var i = 0, j = 0, l = instanceStart.data.count; i < l; i++, j += 2) {
+                start.fromBufferAttribute(instanceStart, i);
+                end.fromBufferAttribute(instanceEnd, i);
+
+                lineDistances[j] = j === 0 ? 0 : lineDistances[j - 1];
+                lineDistances[j + 1] = lineDistances[j] + start.distanceTo(end);
+            }
+
+            var instanceDistanceBuffer = new InstancedInterleavedBuffer(lineDistances, 2, 1); // d0, d1
+
+            geometry.addAttribute('instanceDistanceStart', new InterleavedBufferAttribute(instanceDistanceBuffer, 1, 0)); // d0
+            geometry.addAttribute('instanceDistanceEnd', new InterleavedBufferAttribute(instanceDistanceBuffer, 1, 1)); // d1
+
+            return this
+        }
+    })(),
+
+    copy: function(source) {
+        // todo
+
+        return this
+    },
+});
+
+/**
+ * @author WestLangley / http://github.com/WestLangley
+ *
+ */
+
+function WireframeGeometry2(geometry) {
+    LineSegmentsGeometry.call(this);
+
+    this.type = 'WireframeGeometry2';
+
+    this.fromWireframeGeometry(new WireframeGeometry(geometry));
+
+    // set colors, maybe
+}
+
+WireframeGeometry2.prototype = Object.assign(Object.create(LineSegmentsGeometry.prototype), {
+    constructor: WireframeGeometry2,
+
+    isWireframeGeometry2: true,
+
+    copy: function(source) {
+        // todo
+
+        return this
+    },
+});
+
+/**
+ * @author WestLangley / http://github.com/WestLangley
+ * @author HF. Xiong / http://github.com/xincept
+ */
+
 /**
  * Tween.js - Licensed under the MIT license
  * https://github.com/tweenjs/tween.js
@@ -47701,34 +48619,13 @@ const __scene__ = new WeakMap();
 const __camera__ = new WeakMap();
 
 function updateModels(mo) {
-    if (mo.building) mo.building.boundNeedsUpdate = true;
-    Array.from(mo._overlays)
-        .filter(it => it.isHTMLOverlay)
-        .map(it => ({
-            overlay: it,
-            position: mo.locationToViewport(it.location),
-        }))
-        .sort((a, b) => b.position.distance - a.position.distance)
-        .forEach((it, index) => {
-            if (it.position.distance === Infinity) {
-                it.overlay.render({
-                    x: 0,
-                    y: 0,
-                    zIndex: -100,
-                });
-            } else {
-                it.overlay.render({
-                    x: it.position.x,
-                    y: it.position.y,
-                    zIndex: index + 10,
-                });
-            }
-        });
+    if (mo.mapScene) mo.mapScene.boundNeedsUpdate = true;
+    updateOverlays(mo);
 }
 
 function render(mo) {
     requestAnimationFrame(() => render(mo));
-    if (!mo.building) return
+    if (!mo.mapScene) return
     TWEEN.update();
 
     let renderer = __renderer__.get(mo),
@@ -47753,8 +48650,8 @@ function render(mo) {
 function viewMixin(XMap) {
     Object.assign(XMap.prototype, {
         clear() {
-            this.building && __scene__.get(this).remove(this.building);
-            this.building = null;
+            this.mapScene && __scene__.get(this).remove(this.mapScene);
+            this.mapScene = null;
             this.clearOverlays();
             __renderer__.get(this).clear();
         },
@@ -47764,7 +48661,7 @@ function viewMixin(XMap) {
             const screenPosition = new Vector4();
             return function parseLocation(location) {
                 worldPosition.copy(location);
-                let floor = this.building && this.building.getFloor(location.floor);
+                let floor = this.mapScene && this.mapScene.getFloor(location.floor);
                 if (!floor) {
                     throw new Error('invalid floor')
                 }
@@ -47795,9 +48692,7 @@ function viewMixin(XMap) {
 
 function initDom(mo) {
     mo.$mapWrapper = document.createElement('div');
-    mo.$mapWrapper.style.overflow = 'hidden';
-    mo.$mapWrapper.style.width = '100%';
-    mo.$mapWrapper.style.height = '100%';
+    mo.$mapWrapper.className = 'xmap-container';
     mo.$wrapper.appendChild(mo.$mapWrapper);
 
     mo.$overlayWrapper = document.createElement('div');
@@ -47813,13 +48708,13 @@ function initLights(scene) {
     let light = new AmbientLight(0x747474);
     scene.add(light);
 
-    light = new DirectionalLight(0xadadad, 1.2);
+    light = new DirectionalLight(0x888888, 1.2);
     light.position.set(4000, 4000, 4000).normalize();
     light.target.position.set(0, 0, 0);
     scene.add(light);
 
     light = new DirectionalLight(0x333333);
-    light.position.set(-4000, 2000, -4000).normalize();
+    light.position.set(-4000, -4000, 4000).normalize();
     scene.add(light);
 }
 
@@ -47831,7 +48726,7 @@ function initThree(mo) {
     __scene__.set(mo, scene);
     initLights(scene);
 
-    let camera = new PerspectiveCamera(PERSPECTIVE_FOV, width / height, 140, 100000);
+    let camera = new PerspectiveCamera(PERSPECTIVE_FOV, width / height, 200, 50000);
     camera.spriteScale = 1 / (height / 2 / Math.tan((camera.fov / 2 / 180) * Math.PI));
     __camera__.set(mo, camera);
 
@@ -47899,7 +48794,7 @@ function loadModel(mo, model) {
             value: mo,
         },
     });
-    mo.building = model;
+    mo.mapScene = model;
     let scene = __scene__.get(mo);
     scene.add(model);
 }
@@ -47926,6 +48821,7 @@ const STATE = {
     ZOOM: 1,
     PAN: 2,
     CLICK: 3,
+    RIGHT_CLICK: 4,
     TOUCH_ROTATE: 5,
     TOUCH_ZOOM_PAN: 6,
 };
@@ -47970,11 +48866,11 @@ class GestureControl {
     }
 
     rotateLeft(angle = autoRotationAngle) {
-        this.$map.rotateTo({ angle: this.$map.rotateAngle - angle, animate: false });
+        this.$map.rotateTo({ angle: this.$map.rotateAngle + angle, animate: false });
     }
 
     rotateRight(angle = autoRotationAngle) {
-        this.$map.rotateTo({ angle: this.$map.rotateAngle + angle, animate: false });
+        this.$map.rotateTo({ angle: this.$map.rotateAngle - angle, animate: false });
     }
 
     rotateUp(angle = autoRotationAngle) {
@@ -47987,6 +48883,7 @@ class GestureControl {
 
     _initVars() {
         this.startPosition = new Vector2();
+        this.startPosition2 = new Vector2();
         this.endPosition = new Vector2();
         this.deltaVector = new Vector2();
         this.touchStartPoints = [new Vector2(), new Vector2(), new Vector2()];
@@ -48023,7 +48920,7 @@ class GestureControl {
         });
         eventType(window, 'mousemove', this);
         eventType(this.wrapper.parentElement, 'mousewheel', this);
-        eventType(window, 'contextmenu', this, false);
+        eventType(this.wrapper, 'contextmenu', this, false);
     }
 
     handleEvent(e) {
@@ -48058,7 +48955,6 @@ class GestureControl {
                 e.preventDefault();
                 break
         }
-        e.preventDefault();
     }
 
     _start(e) {
@@ -48070,41 +48966,48 @@ class GestureControl {
             } else if (e.button === 1) {
                 this.state = STATE.ZOOM;
             } else if (e.button === 2) {
-                this.state = STATE.ROTATE;
+                this.state = STATE.RIGHT_CLICK;
             }
+            if (this.state !== STATE.NONE) this.wrapper.classList.add('grabbing');
         }
 
         const point = e.touches ? e.touches[0] : e;
 
-        this.startPosition.set(point.pageX, point.pageY);
+        this.startPosition.set(point.offsetX, point.offsetY);
+        this.startPosition2.set(point.clientX, point.clientY);
     }
 
     _move(e) {
         if (!this.enabled) return
         if (this.state !== STATE.NONE) {
-            // e.preventDefault()
             const point = e.touches ? e.touches[0] : e;
 
-            this.endPosition.set(point.pageX, point.pageY);
+            this.endPosition
+                .set(point.clientX, point.clientY)
+                .sub(this.startPosition2)
+                .add(this.startPosition);
+            this.startPosition2.set(point.clientX, point.clientY);
             this.deltaVector.subVectors(this.endPosition, this.startPosition);
             if (this.deltaVector.length() == 0) {
                 return
             }
-            if (this.state === STATE.ROTATE) {
+            if (this.state === STATE.RIGHT_CLICK || this.state === STATE.ROTATE) {
+                this.state = STATE.ROTATE;
                 this.rotateLeft(((360 * this.deltaVector.x) / PIXELS_PER_ROUND) * userRotateSpeed);
                 this.rotateUp(((360 * this.deltaVector.y) / PIXELS_PER_ROUND) * userRotateSpeed);
             } else if (this.state === STATE.ZOOM) {
                 if (this.deltaVector.y > 0) {
-                    this.$map.zoomIn();
+                    this.$map.zoomOut(1 / TOUCH_SCALE_STEP);
                 } else {
-                    this.$map.zoomOut();
+                    this.$map.zoomIn(TOUCH_SCALE_STEP);
                 }
             } else if (this.state === STATE.CLICK || this.state === STATE.PAN) {
                 this.state = STATE.PAN;
                 this.pan(this.startPosition, this.endPosition);
             }
             this.startPosition.copy(this.endPosition);
-        } else if (this.onHoverListener && this.wrapper.contains(e.target)) {
+        }
+        if (this.onHoverListener && this.wrapper.contains(e.target)) {
             this.onHoverListener(e);
         }
     }
@@ -48114,7 +49017,8 @@ class GestureControl {
         if (this.state === STATE.NONE) return
         let state = this.state;
         this.state = STATE.NONE;
-        if (state === STATE.CLICK && this.onClickListener) {
+        this.wrapper.classList.remove('grabbing');
+        if ((state === STATE.CLICK || state === STATE.RIGHT_CLICK) && this.onClickListener) {
             this.onClickListener(e);
         }
     }
@@ -48122,6 +49026,7 @@ class GestureControl {
     _wheel(e) {
         if (!this.enabled) return
         if (!this.scrollWheelZoomEnabled) return
+        if (this.state === STATE.ZOOM) return
 
         let delta = e.wheelDelta ? e.wheelDelta / 120 : -e.detail / 3;
         let scale = Math.pow(SCALE_STEP, delta);
@@ -48158,7 +49063,6 @@ class GestureControl {
             } else {
                 this.$map.zoomOut(1 / TOUCH_SCALE_STEP);
             }
-            // } else if (this.state === STATE.ROTATE) {
         }
         this.touchEndPoints.forEach((p, i) => this.touchStartPoints[i].copy(p));
     }
@@ -48167,7 +49071,7 @@ class GestureControl {
 Object.assign(GestureControl.prototype, Object.create(EventDispatcher.prototype));
 Object.assign(GestureControl.prototype, {
     viewToWorld: (function() {
-        const plane = new Plane(new Vector3(0, 1, 0), 0);
+        const plane = new Plane(new Vector3(0, 0, 1), 0);
 
         return function(point) {
             let raycaster = getCameraRaycast(this.$map, point);
@@ -48191,7 +49095,7 @@ class BaseControl {
     onRemove() {}
 }
 
-const REVISION$1 = '1dev';
+const REVISION$1 = '1dev-1';
 
 const ViewMode = {
     MODE_3D: '3d',
@@ -48217,7 +49121,7 @@ class FloorControl extends BaseControl {
         mm.on(
             'mapLoaded',
             (this._mapLoaded_ = () => {
-                this._show_(mm.building);
+                this._show_(mm.mapScene);
             })
         );
         mm.on(
@@ -48232,8 +49136,8 @@ class FloorControl extends BaseControl {
                 this.setFloor(floor);
             })
         );
-        if (mm.building) {
-            this._show_(mm.building);
+        if (mm.mapScene) {
+            this._show_(mm.mapScene);
         }
     }
 
@@ -48247,7 +49151,7 @@ class FloorControl extends BaseControl {
     }
 
     _refresh_() {
-        if (!this.$map || !this.$map.building) {
+        if (!this.$map || !this.$map.mapScene) {
             this.$el.style.display = 'none';
         } else if (this.$elAll) {
             if (this.$map.viewMode === ViewMode.MODE_2D) {
@@ -48263,9 +49167,8 @@ class FloorControl extends BaseControl {
         }
     }
 
-    _show_(building) {
-        this.building = building;
-        const floors = new Map(building.floors.map(f => [f.info.name, f]));
+    _show_(mapScene) {
+        const floors = new Map(mapScene.floors.map(f => [f.info.name, f]));
         if (floors.size < 2) {
             this.$el.style.display = 'none';
             this.$elAll = null;
@@ -48274,7 +49177,7 @@ class FloorControl extends BaseControl {
         }
         while (this.$el.lastChild) this.$el.removeChild(this.$el.lastChild);
 
-        building.floors
+        mapScene.floors
             .map(f => f.name)
             .concat('All')
             .reverse()
@@ -48328,7 +49231,60 @@ class FloorControl extends BaseControl {
     }
 }
 
+class MapEvent {
+    constructor({ type, x, y, floor, target, currentTarget, domEvent, address, hovered }) {
+        Object.defineProperties(this, {
+            type: {
+                configurable: false,
+                writable: false,
+                value: type,
+            },
+            x: {
+                configurable: false,
+                writable: false,
+                value: x,
+            },
+            y: {
+                configurable: false,
+                writable: false,
+                value: y,
+            },
+            floor: {
+                configurable: false,
+                writable: false,
+                value: floor,
+            },
+            target: {
+                configurable: false,
+                writable: false,
+                value: target,
+            },
+            currentTarget: {
+                configurable: false,
+                writable: false,
+                value: currentTarget,
+            },
+            domEvent: {
+                configurable: false,
+                writable: false,
+                value: domEvent,
+            },
+            address: {
+                configurable: false,
+                writable: false,
+                value: address,
+            },
+            hovered: {
+                configurable: false,
+                writable: false,
+                value: hovered,
+            },
+        });
+    }
+}
+
 const __preHover__ = new WeakMap();
+const __pickMode__ = new WeakMap();
 
 function eventMixin(Class) {
     if (!Class.prototype.dispatchEvent) {
@@ -48372,89 +49328,151 @@ function eventMixin(Class) {
                 }
             }
         },
+        pickStart() {
+            __pickMode__.set(this, true);
+            this.$mapWrapper.classList.add('picking');
+        },
+        pickEnd() {
+            this.$mapWrapper.classList.remove('picking');
+            __pickMode__.delete(this);
+        },
     });
 }
 
-const initEvent = (function() {
-    const mouse = new Vector2();
-    const intersectObjects = function(eventType, mo, e) {
-        if (!mo.building) {
+const mouse = new Vector2();
+function intersectObjects(eventType, mo, e) {
+    if (!mo.mapScene) {
+        return
+    }
+    let point = e.touches ? e.touches[0] : e;
+    mouse.set(point.offsetX, point.offsetY);
+
+    let objects = Array.from(mo.mapScene.floors);
+    if (!__pickMode__.get(mo)) {
+        objects.splice(
+            0,
+            0,
+            ...Array.from(mo._overlays)
+                .filter(
+                    it =>
+                        it.object3D &&
+                        it.hasEventListener &&
+                        it.hasEventListener(eventType) &&
+                        it.object3D.parent &&
+                        it.object3D.parent.visible
+                )
+                .map(it => it.object3D)
+        );
+    }
+    objects = objects.filter(it => it.visible);
+
+    let raycaster = getCameraRaycast(mo, mouse);
+    let intersects = raycaster.intersectObjects(objects, false);
+    let top = intersects.find(it => it.object.isFloor);
+    if (top) {
+        let intersectsRooms = raycaster.intersectObjects(top.object.rooms, false);
+        intersectsRooms && intersects.push(...intersectsRooms);
+    }
+    return intersects
+}
+
+function pickOverlay(intersects) {
+    let overlays = intersects.filter(it => it.object.handler && it.object.handler.isOverlay);
+    let fronts = overlays.filter(it => !it.object.material.depthTest);
+    let floor = intersects.find(it => it.object.isFloor);
+    let overlay;
+    if (fronts.length > 0) {
+        overlay = fronts[0];
+    } else if (overlays.length > 0) {
+        overlay = !floor || floor.distance + 1 > overlays[0].distance ? overlays[0] : undefined;
+    }
+    if (overlay) {
+        overlay = overlay.object.handler;
+    }
+    return overlay
+}
+
+function dispatchMapEvent(mo, type, e, intersects, overlay) {
+    if (mo.hasEventListener(type)) {
+        let floor = intersects && intersects.find(it => it.object.isFloor);
+        let room = intersects && intersects.find(it => it.object.isRoom);
+        if (floor) {
+            mo.dispatchEvent({
+                type,
+                message: new MapEvent({
+                    type,
+                    x: Math.round(floor.point.x) + 0,
+                    y: Math.round(floor.point.y) + 0,
+                    floor: floor.object.name,
+                    target: mo,
+                    currentTarget: overlay,
+                    domEvent: e,
+                    address: `${mo.mapScene.name} ${floor.object.name} ${(room && room.object.name) || ''}`.trim(),
+                }),
+            });
+        } else {
+            mo.dispatchEvent({
+                type,
+                message: new MapEvent({
+                    type,
+                    domEvent: e,
+                    outside: true,
+                }),
+            });
+        }
+    }
+}
+
+const initEvent = function(mo) {
+    mo.gestureControl.onClickListener = e => {
+        if (__pickMode__.get(mo) && e.button !== 0) return
+        let eventType = e.button === 0 ? 'click' : 'rightClick';
+        let intersects = intersectObjects(eventType, mo, e);
+        if (!intersects || intersects.length === 0) {
+            dispatchMapEvent(mo, eventType, e);
             return
         }
-        let point = e.touches ? e.touches[0] : e;
-        mouse.set(point.pageX, point.pageY);
+        let overlay = pickOverlay(intersects);
+        if (overlay) {
+            overlay.dispatchEvent({ type: eventType, message: new MapEvent({ target: overlay, domEvent: e }) });
+        }
 
-        let raycaster = getCameraRaycast(mo, mouse);
-        return raycaster.intersectObjects(
-            [...mo._overlays]
-                .filter(it => it.hasEventListener(eventType))
-                .map(it => it.object3D)
-                .concat(mo.building.floors)
-                .filter(it => it.visible),
-            false
-        )
+        dispatchMapEvent(mo, eventType, e, intersects, overlay);
     };
-    return function(mo) {
-        mo.gestureControl.onClickListener = e => {
-            let intersects = intersectObjects('click', mo, e);
-            if (!intersects || intersects.length === 0) {
-                return
+    mo.gestureControl.onHoverListener = e => {
+        let preHover = __preHover__.get(mo);
+        function clearPreHover() {
+            if (preHover) {
+                __preHover__.delete(mo);
+                preHover.dispatchEvent({
+                    type: 'hover',
+                    message: new MapEvent({ type: 'hover', target: overlay, domEvent: e, hovered: false }),
+                });
+                mo.$mapWrapper.classList.remove('clickable');
             }
-            let overlay,
-                fo = intersects.filter(it => it.object.isFloor || (it.object.handler && it.object.handler.isOverlay));
-            if (fo[0] && fo[0].object.handler && fo[0].object.handler.isOverlay) {
-                overlay = fo[0].object.handler;
-                fo[0].object.handler.dispatchEvent({ type: 'click', message: { overlay, domEvent: e } });
-            }
-            if (mo.hasEventListener('click')) {
-                let floor = intersects.filter(it => it.object.isFloor)[0];
-                if (floor) {
-                    mo.dispatchEvent({
-                        type: 'click',
-                        message: {
-                            x: Math.round(floor.point.x),
-                            y: -Math.round(floor.point.z),
-                            floor: floor.object.handler.name,
-                            overlay,
-                            domEvent: e,
-                        },
-                    });
+        }
+        // if (__pickMode__.get(mo)) return
+        let intersects = intersectObjects('hover', mo, e);
+        let overlay = null;
+        if (intersects && intersects.length > 0) {
+            overlay = pickOverlay(intersects);
+        }
+        if (preHover != overlay) {
+            clearPreHover();
+            if (overlay) {
+                __preHover__.set(mo, overlay);
+                overlay.dispatchEvent({
+                    type: 'hover',
+                    message: new MapEvent({ type: 'hover', target: overlay, domEvent: e, hovered: true }),
+                });
+                if (overlay.hasEventListener('click')) {
+                    mo.$mapWrapper.classList.add('clickable');
                 }
             }
-        };
-        mo.gestureControl.onHoverListener = e => {
-            let intersects = intersectObjects('hover', mo, e);
-            if (!intersects || intersects.length === 0) {
-                return
-            }
-            let overlay,
-                preHover = __preHover__.get(this),
-                fo = intersects.filter(it => it.object.isFloor || (it.object.handler && it.object.handler.isOverlay));
-            if (fo[0] && fo[0].object.handler && fo[0].object.handler.isOverlay) {
-                overlay = fo[0].object.handler;
-            }
-            if (preHover != overlay) {
-                overlay && overlay.dispatchEvent({ type: 'hover', message: { overlay, domEvent: e, hovered: true } });
-                preHover && preHover.dispatchEvent({ type: 'hover', message: { overlay, domEvent: e, hovered: false } });
-            }
-            if (mo.hasEventListener('hover')) {
-                let floor = intersects.filter(it => it.object.isFloor)[0];
-                if (floor) {
-                    mo.dispatchEvent({
-                        type: 'hover',
-                        message: {
-                            x: Math.round(floor.point.x),
-                            y: -Math.round(floor.point.z),
-                            floor: floor.object.handler.name,
-                            overlay,
-                            domEvent: e,
-                        },
-                    });
-                }
-            }
-        };
-    }
-})();
+        }
+        dispatchMapEvent(mo, 'hover', e, intersects, overlay);
+    };
+};
 
 const mixinMapObject = function(Class) {
     eventMixin(Class);
@@ -48487,59 +49505,6 @@ const parsePoints = array => {
     return points
 };
 
-const __needsUpdate__ = new Map();
-const canvasScale = 2;
-
-class SpriteCanvasMaterial extends SpriteMaterial {
-    constructor(options) {
-        let canvas = document.createElement('canvas');
-        let texture = new Texture(canvas);
-        texture.minFilter = LinearFilter;
-        let { measure, compile } = options;
-        delete options.measure;
-        delete options.compile;
-        super({
-            sizeAttenuation: false,
-            transparent: true,
-            alphaTest: 0.1,
-            ...options,
-            map: texture,
-        });
-
-        this.measure = measure;
-        this.compile = compile;
-
-        this.needsUpdate = true;
-    }
-
-    set needsUpdate(value) {
-        __needsUpdate__.set(this, value);
-        if (value && this.map) {
-            let canvas = this.map.image;
-            canvas.width = 512;
-            canvas.height = 512;
-            let size = this.measure(canvas.getContext('2d'));
-            canvas.width = Math.ceil(size.width * canvasScale);
-            canvas.height = Math.ceil(size.height * canvasScale);
-            let context = canvas.getContext('2d');
-            this.compile(context, canvasScale);
-            this.map.needsUpdate = true;
-        }
-    }
-
-    get needsUpdate() {
-        return __needsUpdate__.get(this)
-    }
-
-    get width() {
-        return this.map.image.width / canvasScale
-    }
-
-    get height() {
-        return this.map.image.height / canvasScale
-    }
-}
-
 class XSprite extends Sprite {
     constructor(...args) {
         super(...args);
@@ -48561,7 +49526,11 @@ class XSprite extends Sprite {
 
     onBeforeRender(renderer, scene, camera) {
         if (this.width && this.height) {
-            this.scale.set(this.width * camera.spriteScale, this.height * camera.spriteScale, 1);
+            if (!this.material.sizeAttenuation) {
+                this.scale.set(this.width * camera.spriteScale, this.height * camera.spriteScale, 1);
+            } else {
+                this.scale.set(this.width, this.height, 1);
+            }
         } else {
             this.visible = false;
         }
@@ -48864,12 +49833,13 @@ class Room extends Mesh {
         let geometry2d = new ShapeGeometry(shape);
         this.geometry = geometry3d;
         this.material = new MeshLambertMaterial();
-        this.material.alphaTest = 0.1;
+        // this.material.alphaTest = 0.1
         let object = this;
         object.onViewModeChange = is3dMode => {
             object.geometry = is3dMode ? geometry3d : geometry2d;
             object.position.setZ(is3dMode ? 0 : 1);
         };
+        this.renderOrder = 2;
         this.type = 'Room';
         let box = new Box2();
 
@@ -48915,6 +49885,7 @@ class Room extends Mesh {
                     cube.geometry = is3dMode ? geometry3d : geometry2d;
                     cube.position.setZ(is3dMode ? this.floor.info.height / 2 : 2);
                 };
+                cube.renderOrder = 3;
                 object.add(cube);
             });
         } else {
@@ -48925,7 +49896,7 @@ class Room extends Mesh {
             wire.position.set(0, 0, this.floor.info.height);
             wire.onViewModeChange = is3dMode => wire.position.setZ(is3dMode ? this.info.height : 2);
             object.add(wire);
-
+            wire.renderOrder = 3;
             this.onThemeChange = theme => {
                 let roomStyle = theme.roomStyle[this.info.category] || theme.roomStyle['default'];
                 this.material.setValues(roomStyle);
@@ -48952,31 +49923,33 @@ class Room extends Mesh {
                     cube.geometry = is3dMode ? geometry3d : geometry2d;
                     cube.position.setZ(is3dMode ? this.info.height / 2 : 2);
                 };
+                cube.renderOrder = 3;
                 object.add(cube);
             });
         }
 
         let sprite = new Label(this.info.name);
-        sprite.onThemeChange = theme => {
-            let material = theme.materialMap.get(this.info.category + '');
-            sprite.setOptions(theme.fontStyle);
-            if (!material || !material.map) {
-                sprite.setIcon();
-            } else {
-                sprite.setIcon({ icon: material.map });
-            }
-            sprite.needsUpdate = true;
-        };
         if (sprite) {
+            sprite.onThemeChange = theme => {
+                let material = theme.materialMap.get(this.info.category + '');
+                sprite.setOptions(theme.fontStyle);
+                if (!material || !material.map) {
+                    sprite.setIcon();
+                } else {
+                    material.depthTest = false;
+                    sprite.setIcon({ icon: material.map });
+                }
+                sprite.needsUpdate = true;
+            };
             let center = box.setFromPoints(points).getCenter(new Vector2());
             sprite.position.set(center.x, center.y, this.floor.info.height + 5);
             sprite.center.set(0.5, 0);
-            sprite.renderOrder = 1;
+            sprite.renderOrder = 10;
             sprite.onViewModeChange = is3dMode => sprite.position.setZ(is3dMode ? this.floor.info.height + 5 : 3);
             object.add(sprite);
+            sprite.renderOrder = 99;
+            object.label = sprite;
         }
-
-        object.label = sprite;
     }
 }
 
@@ -49006,24 +49979,27 @@ class PubPoint extends XSprite {
 
     initObject3D() {
         let sprite = this;
-        sprite.onThemeChange = theme => {
-            if (theme.materialMap.has(this.info.type)) {
-                sprite.width = PUB_POINT_SIZE.width;
-                sprite.height = PUB_POINT_SIZE.height;
-                sprite.material = theme.materialMap.get(this.info.type);
-            } else {
-                sprite.width = 0;
-                sprite.height = 0;
-            }
-        };
-        sprite.width = PUB_POINT_SIZE.width;
-        sprite.height = PUB_POINT_SIZE.height;
+        this.width = PUB_POINT_SIZE.width;
+        this.height = PUB_POINT_SIZE.height;
         this.scale.copy(sprite.scale);
         this.position.copy(this.center).setZ(this.floor.info.height + 5);
-        sprite.handler = this;
-        sprite.center.set(0.5, 0);
-        sprite.renderOrder = 1;
-        sprite.onViewModeChange = is3dMode => sprite.position.setZ(is3dMode ? this.floor.info.height + 5 : 3);
+        this.center.set(0.5, 0);
+        this.renderOrder = 99;
+    }
+
+    onThemeChange(theme) {
+        if (theme.materialMap.has(this.info.type)) {
+            this.width = PUB_POINT_SIZE.width;
+            this.height = PUB_POINT_SIZE.height;
+            this.material = theme.materialMap.get(this.info.type).clone();
+        } else {
+            this.width = 0;
+            this.height = 0;
+        }
+    }
+
+    onViewModeChange(is3dMode) {
+        this.position.setZ(is3dMode ? this.floor.info.height + 5 : 3);
     }
 }
 
@@ -49058,14 +50034,14 @@ class Floor extends Mesh {
         let geometry2d = new ShapeGeometry(shape);
         this.geometry = geometry2d;
         let board = new Mesh(geometry3d);
+        this.material = new MeshLambertMaterial();
+        board.material = this.material;
         this.onThemeChange = theme => {
-            this.material = new MeshPhongMaterial(theme.floor);
-            board.material = this.material;
+            this.material.setValues(theme.floor);
         };
         this.add(board);
         board.position.set(0, 0, -10);
         board.onViewModeChange = is3dMode => (board.visible = is3dMode);
-
         let floorHeight = this.info.height;
         if (!floorHeight || floorHeight < 1e-4) {
             floorHeight = 500.0;
@@ -49075,6 +50051,8 @@ class Floor extends Mesh {
         this.handler = this;
         this.type = 'Floor';
         this.sprites = [];
+        
+        this.renderOrder = 1;
 
         let { funcAreas: rooms, pubPoint } = attr;
         this.name = this.info.name;
@@ -49116,7 +50094,7 @@ Object.defineProperties(Floor.prototype, {
 
 const FLOOR_SPACE = 600;
 
-class Building extends Mesh {
+class MapScene extends Mesh {
     constructor(attr = {}) {
         super();
         let {
@@ -49126,6 +50104,7 @@ class Building extends Mesh {
             floorSize = floors.length,
         } = attr;
         this.info = building;
+        this.name = building.name;
         if (
             groundFloors < 0 ||
             underFloors < 0 ||
@@ -49149,7 +50128,7 @@ class Building extends Mesh {
 
     initObject3D() {
         let object = this;
-        object.type = 'Building';
+        object.type = 'MapScene';
         object.sprites = [];
         this.floors.forEach((floor, index) => {
             object.add(floor);
@@ -49169,7 +50148,7 @@ class Building extends Mesh {
 
         this.showAllFloors();
 
-        object.rotateOnAxis(new Vector3(1, 0, 0), -Math.PI / 2);
+        // object.rotateOnAxis(new Vector3(1, 0, 0), -Math.PI / 2)
     }
 
     onViewModeChange() {
@@ -49179,9 +50158,6 @@ class Building extends Mesh {
     onThemeChange() {}
 
     showFloor(floorNum) {
-        if (floorNum > this.groundFloor || floorNum < -this.underFloor || floorNum === 0) {
-            throw new Error('Invalid floor number.')
-        }
         let current = this.getFloor(this.currentFloorNum);
         let target = this.getFloor(floorNum);
         if (current == target) {
@@ -49195,10 +50171,11 @@ class Building extends Mesh {
         }
 
         let index = this.children.filter(obj => obj.isFloor).findIndex(it => it === target);
-        new TWEEN.Tween(this.position)
-            .to({ y: -index * FLOOR_SPACE }, current != null ? 150 : 0)
-            .onComplete(() => (this.boundNeedsUpdate = true))
+        let animation = new TWEEN.Tween(this.position)
+            .to({ z: -index * FLOOR_SPACE }, current != null ? 150 : 0)
             .start();
+        this._updateDepthTest_();
+        return animation
     }
 
     showAllFloors() {
@@ -49207,6 +50184,18 @@ class Building extends Mesh {
                 obj.visible = this._shouldShowAll_() || obj === this.getFloor(this.currentFloorNum);
             }
         });
+        this._updateDepthTest_();
+    }
+
+    _updateDepthTest_() {
+        this.floors
+            .filter(it => it.visible)
+            .forEach((f, i, arr) => {
+                let top = i === arr.length - 1;
+                f.sprites.forEach(s => {
+                    s.material && (s.material.depthTest = !top);
+                });
+            });
     }
 
     getCurrentFloor() {
@@ -49222,10 +50211,10 @@ class Building extends Mesh {
     }
 }
 
-mixinMapObject(Building);
+mixinMapObject(MapScene);
 
-Object.defineProperties(Building.prototype, {
-    isBuilding: {
+Object.defineProperties(MapScene.prototype, {
+    isMapScene: {
         configurable: false,
         writable: false,
         value: true,
@@ -49237,7 +50226,7 @@ Object.defineProperties(Building.prototype, {
     },
 });
 
-Object.assign(Building.prototype, {
+Object.assign(MapScene.prototype, {
     onBeforeRender: (function() {
         const boundBoxSize = new Vector2();
         return function(renderer, scene, camera) {
@@ -49299,7 +50288,7 @@ class MapLoader extends Loader {
         )
     }
     parse(json) {
-        return new Building(json.data)
+        return new MapScene(json.data)
     }
 }
 
@@ -49310,7 +50299,6 @@ var themeNormal = {
         color: '#000000',
         opacity: 0.1,
         transparent: true,
-        depthTest: false,
     },
     floor: {
         color: '#e0e0e0',
@@ -49480,9 +50468,9 @@ function changeTheme$1(mo, theme) {
         }
         clearRenderer(mo, background, 1);
     }
-    if (mo.building) {
-        mo.building.boundNeedsUpdate = true;
-        changeTheme$$1(mo.building);
+    if (mo.mapScene) {
+        mo.mapScene.boundNeedsUpdate = true;
+        changeTheme$$1(mo.mapScene);
     }
 }
 
@@ -49493,11 +50481,11 @@ function loaderMixin(XMap) {
                 this.clear();
                 this.mapLoader
                     .load(fileName)
-                    .then(building => {
-                        loadModel(this, building);
+                    .then(mapScene => {
+                        loadModel(this, mapScene);
                         changeTheme$1(this, this.themeLoader.getTheme(__currentTheme__.get(this)));
 
-                        building.showFloor('F1');
+                        mapScene.showFloor('F1');
                         
                         this.dispatchEvent({ type: 'mapLoaded' });
                         resolve(this);
@@ -49538,8 +50526,10 @@ const __mapState__ = new WeakMap();
 const __mapStateReset__ = new WeakMap();
 const __animationList__ = new WeakMap();
 
-const EPS = 1e-7;
 const ANIMATE_DURATION = 150;
+
+const MAX_SCALE = 5;
+const MIN_SCALE = 0.2;
 
 function initState(mo) {
     let {
@@ -49569,11 +50559,11 @@ function initState(mo) {
         center: new Vector3(0, 0, 0),
     };
     let tilt = Math.min(state.maxTiltAngle, Math.max(state.tiltAngle, state.minTiltAngle));
-    tilt = Math.max(EPS, Math.min(90 - EPS, tilt));
+    tilt = Math.max(0, Math.min(90, tilt));
     state.tiltAngle = tilt;
     __mapState__.set(mo, state);
     __mapStateReset__.set(mo, resetState);
-    __animationList__.set(mo, new Set());
+    __animationList__.set(mo, new Map());
 
     mo.on('mapLoaded', () => {
         mo.setShowAllFloors(state.showAllFloors);
@@ -49589,7 +50579,44 @@ function changeViewMode(mo, is3dMode) {
             object.children.forEach(obj => changeMode(obj));
         }
     }
-    changeMode(mo.building);
+    changeMode(mo.mapScene);
+}
+
+function _transform_(mo, name, value, duration, callback) {
+    let before = __animationList__.get(mo).get(name);
+    if (before) {
+        before.stop();
+        __animationList__.get(mo).delete(name);
+    }
+    let state = __mapState__.get(mo);
+    let obj, to;
+    if (typeof value === 'object') {
+        obj = state[name];
+        to = value;
+    } else {
+        obj = state;
+        to = { [name]: value };
+    }
+    if (duration > 0) {
+        let animation = new TWEEN.Tween(obj)
+            .to(to, duration)
+            .onComplete(() => {
+                state.needsUpdate = true;
+                __animationList__.get(mo).delete(name);
+                callback && callback();
+            })
+            .onStop(() => callback && callback(false))
+            .start();
+        __animationList__.get(mo).set(name, animation);
+    } else {
+        if (typeof value === 'object') {
+            state[name].copy(value);
+        } else {
+            state[name] = value;
+        }
+        state.needsUpdate = true;
+        callback && callback();
+    }
 }
 
 function stateMixin(XMap) {
@@ -49613,48 +50640,87 @@ function stateMixin(XMap) {
 
             changeViewMode(this, mode === ViewMode.MODE_3D);
 
-            this.dispatchEvent({ type: 'stateChanged', message: this.building.currentFloorNum });
+            this.dispatchEvent({ type: 'stateChanged', message: this.mapScene.currentFloorNum });
+        },
+
+        flyHome(duration, callback) {
+            let resetState = __mapStateReset__.get(this);
+            this.flyTo(
+                { x: 0, y: 0 },
+                {
+                    tilt: resetState.tiltAngle,
+                    rotate: resetState.rotateAngle,
+                    scale: resetState.scale,
+                    duration,
+                    callback,
+                    animate: true,
+                }
+            );
+        },
+
+        flyTo(target, { tilt, rotate, scale, duration = ANIMATE_DURATION, callback, animate = true } = {}) {
+            if (!target) {
+                throw new Error('invalid target')
+            }
+
+            let center = new Vector3(0, 0, 0);
+            if (target.isOverlay) {
+                if (!target.object3D) {
+                    throw new Error('invalid overlay')
+                }
+                if (!target.object3D.parent) {
+                    throw new Error('overlay still not be placed on map')
+                }
+                if (!target.worldPosition) {
+                    throw new Error('unknown error')
+                }
+                center.copy(target.worldPosition);
+                this.setFloor(target.floor);
+            } else {
+                center.copy(target);
+            }
+            let listen = () => {
+                callback && callback();
+            };
+            if (Number.isFinite(tilt)) {
+                this.tiltTo({ angle: tilt, duration, callback: listen, animate });
+            }
+            if (Number.isFinite(rotate)) {
+                this.rotateTo({ angle: rotate, duration, callback: listen, animate });
+            }
+            if (Number.isFinite(scale)) {
+                this.scaleTo({ scale, duration, callback: listen, animate });
+            }
+            this.moveTo({ position: center, duration, callback: listen, animate });
         },
 
         rotateTo({ angle, duration = ANIMATE_DURATION, callback, animate = true }) {
-            let state = __mapState__.get(this);
-            if (animate) {
-                let animation = new TWEEN.Tween(state)
-                    .to({ rotateAngle: angle }, duration)
-                    .onComplete(() => {
-                        state.needsUpdate = true;
-                        __animationList__.get(this).delete(animation);
-                    })
-                    .start();
-                __animationList__.get(this).add(animation);
-            } else {
-                state.rotateAngle = angle;
-                state.needsUpdate = true;
-                callback && callback();
+            if (!Number.isFinite(angle)) {
+                throw new Error('invalid angle')
             }
+            _transform_(this, 'rotateAngle', angle, animate ? duration : 0, callback);
         },
 
         tiltTo({ angle, duration = ANIMATE_DURATION, callback, animate = true }) {
+            if (!Number.isFinite(angle)) {
+                throw new Error('invalid angle')
+            }
             let state = __mapState__.get(this);
             angle = Math.min(state.maxTiltAngle, Math.max(angle, state.minTiltAngle));
-            angle = Math.max(EPS, Math.min(90 - EPS, angle));
+            angle = Math.max(0, Math.min(90, angle));
             if (__mapState__.get(this).viewMode === ViewMode.MODE_2D) {
                 return
             }
-            if (animate) {
-                let animation = new TWEEN.Tween(state)
-                    .to({ tiltAngle: angle }, duration)
-                    .onComplete(() => {
-                        state.needsUpdate = true;
-                        __animationList__.get(this).delete(animation);
-                    })
-                    .start();
-                __animationList__.get(this).add(animation);
-            } else {
-                __mapState__.get(this).tiltAngle = angle;
-                __mapState__.get(this).needsUpdate = true;
-                callback && callback();
-            }
+            _transform_(this, 'tiltAngle', angle, animate ? duration : 0, callback);
+        },
+
+        moveTo({ position: { x = 0, y = 0 } = {}, duration = ANIMATE_DURATION, callback, animate = true }) {
+            _transform_(this, 'center', { x, y, z: 0 }, animate ? duration : 0, callback);
+        },
+
+        scaleTo({ scale = 1, duration = ANIMATE_DURATION, callback, animate = true }) {
+            scale = Math.min(MAX_SCALE, Math.max(MIN_SCALE, scale));
+            _transform_(this, 'scale', scale, animate ? duration : 0, callback);
         },
 
         zoomIn(scale = 1.25) {
@@ -49666,22 +50732,39 @@ function stateMixin(XMap) {
         },
 
         setFloor(floor) {
-            this.building.showFloor(floor);
-            __mapState__.get(this).needsUpdate = true;
+            let state = __mapState__.get(this);
+            let before = __animationList__.get(this).get('floor');
+            if (before) {
+                before.stop();
+                __animationList__.get(this).delete('floor');
+            }
+            let animation = this.mapScene.showFloor(floor);
+            if (animation) {
+                animation
+                    .onComplete(() => {
+                        state.needsUpdate = true;
+                        __animationList__.get(this).delete('floor');
+                    })
+                    .start();
+                __animationList__.get(this).set('floor', animation);
+            }
+            state.needsUpdate = true;
 
             this.dispatchEvent({ type: 'floorChanged', message: floor });
         },
 
         setShowAllFloors(showAll = true) {
             __mapState__.get(this).showAllFloors = !!showAll;
-            this.building.showAllFloors(showAll);
+            this.mapScene.showAllFloors(showAll);
             __mapState__.get(this).needsUpdate = true;
 
             this.dispatchEvent({ type: 'stateChanged' });
         },
 
-        _scale_(scale) {
-            __mapState__.get(this).scale *= scale;
+        _scale_(scalar) {
+            let scale = __mapState__.get(this).scale * scalar;
+            scale = Math.min(MAX_SCALE, Math.max(MIN_SCALE, scale));
+            __mapState__.get(this).scale = scale;
             __mapState__.get(this).needsUpdate = true;
         },
 
@@ -49692,28 +50775,32 @@ function stateMixin(XMap) {
 
         _update_: (function() {
             let offsetVector = new Vector3();
+            let ZeroVector = new Vector3(0, 0, 0);
             return function(scene, camera) {
                 let state = __mapState__.get(this);
                 state.needsUpdate = false;
-                let position = camera.position;
 
-                let rotate = state.rotateAngle - 90;
-                let tilt = EPS;
+                let rotate = state.rotateAngle;
+                let tilt = 0;
                 let radius = state.height / state.scale;
                 let center = state.center;
 
                 if (state.viewMode === ViewMode.MODE_3D) {
                     tilt = Math.min(state.maxTiltAngle, Math.max(state.tiltAngle, state.minTiltAngle));
-                    tilt = Math.max(EPS, Math.min(90 - EPS, tilt));
+                    tilt = Math.max(0, Math.min(90, tilt));
                 }
-                rotate = (rotate / 180) * Math.PI;
+                rotate = -(rotate / 180) * Math.PI;
                 tilt = (tilt / 180) * Math.PI;
-                offsetVector.x = radius * Math.sin(tilt) * Math.sin(rotate);
-                offsetVector.y = radius * Math.cos(tilt);
-                offsetVector.z = radius * Math.sin(tilt) * Math.cos(rotate);
+                camera.position.set(0, 0, radius);
+                camera.lookAt(ZeroVector);
+                camera.rotateOnAxis({ x: 0, y: 0, z: 1 }, rotate);
+                camera.rotateOnAxis({ x: 1, y: 0, z: 0 }, tilt);
 
-                position.copy(center).add(offsetVector);
-                camera.lookAt(center);
+                offsetVector.x = radius * Math.sin(tilt) * Math.sin(rotate);
+                offsetVector.y = -radius * Math.sin(tilt) * Math.cos(rotate);
+                offsetVector.z = radius * Math.cos(tilt) - radius;
+
+                camera.position.add(offsetVector).add(center);
             }
         })(),
     });
@@ -49746,7 +50833,7 @@ function stateMixin(XMap) {
         },
         currentFloor: {
             get: function() {
-                return this.building.currentFloorNum
+                return this.mapScene.currentFloorNum
             },
             set: function(value) {
                 this.setFloor(value);
@@ -49850,7 +50937,7 @@ function styleInject(css, ref) {
   }
 }
 
-var css = ".xmap-controls, .xmap-overlays {\r\n    width: 100%;\r\n    height: 100%;\r\n    position: absolute;\r\n    left: 0;\r\n    top: 0;\r\n    pointer-events: none;\r\n    overflow: hidden;\r\n}\r\n\r\n.xmap-controls *, .xmap-overlays * {\r\n    pointer-events: auto;\r\n}\r\n\r\n.xmap-floor-control {\r\n    position: absolute;\r\n    right: 10px;\r\n    top: 10px;\r\n    z-index: 100;\r\n    background: white;\r\n    border: solid 1px #dfdfdf;\r\n    text-align: center;\r\n    border-radius: 3px;\r\n    font-size: 14px;\r\n    padding: 0;\r\n    color: #333;\r\n}\r\n\r\n.xmap-floor-control li {\r\n    list-style: none;\r\n    line-height: 40px;\r\n    width: 40px;\r\n    height: 40px;\r\n    border-bottom: solid 1px #dfdfdf;\r\n    -ms-user-select: none;\r\n    -webkit-user-select: none;\r\n    user-select: none;\r\n}\r\n\r\n.xmap-floor-control li:last-child {\r\n    border-bottom: none;\r\n}\r\n\r\n.xmap-floor-control .active:not(.btn-all) {\r\n    background-color: #e6e6e6;\r\n    -webkit-box-shadow: inset 0 3px 5px rgba(0, 0, 0, .125);\r\n    box-shadow: inset 0 3px 5px rgba(0, 0, 0, .125);\r\n    outline: 0;\r\n}\r\n\r\n.xmap-floor-control .btn-all.active {\r\n    background: #3c84d0;\r\n    color: white;\r\n}";
+var css = ".xmap-container{overflow:hidden;width:100%;height:100%;cursor:grab}.xmap-container.grabbing{cursor:grabbing}.xmap-container.clickable,.xmap-container.picking{cursor:pointer}.xmap-controls,.xmap-overlays{width:100%;height:100%;position:absolute;left:0;top:0;pointer-events:none;overflow:hidden}.xmap-controls{z-index:2}.xmap-overlays{z-index:1}.xmap-controls *,.xmap-overlays *{pointer-events:auto}.xmap-floor-control{position:absolute;right:10px;top:10px;z-index:3;background:#fff;border:1px solid #dfdfdf;text-align:center;border-radius:3px;font-size:14px;padding:0;color:#333}.xmap-floor-control li{list-style:none;line-height:40px;width:40px;height:40px;border-bottom:1px solid #dfdfdf;-ms-user-select:none;-webkit-user-select:none;user-select:none;cursor:pointer}.xmap-floor-control li:last-child{border-bottom:none}.xmap-floor-control .active:not(.btn-all){background-color:#e6e6e6;box-shadow:inset 0 3px 5px rgba(0,0,0,.125);outline:0}.xmap-floor-control .btn-all.active{background:#3c84d0;color:#fff}";
 styleInject(css);
 
 class XMap {
@@ -49875,7 +50962,55 @@ class Location {
         this.x = x;
         this.y = y;
         this.z = z;
-        this.localPosition = new Vector3(x, y, z);
+        let localPosition = new Vector3(x, y, z);
+        Object.defineProperties(this, {
+            localPosition: {
+                configurable: false,
+                get: function() {
+                    return localPosition.set(this.x, this.y, this.z)
+                },
+            },
+        });
+    }
+
+    set(floor, x, y, z = 0) {
+        this.floor = floor;
+        this.x = x;
+        this.y = y;
+        this.z = z;
+        return this
+    }
+
+    setFloor(floor) {
+        this.floor = floor;
+        return this
+    }
+
+    setX(x) {
+        this.x = x;
+        return this
+    }
+
+    setY(y) {
+        this.y = y;
+        return this
+    }
+
+    setZ(z) {
+        this.z = z;
+        return this
+    }
+
+    copy(location) {
+        this.floor = location.floor;
+        this.x = location.x;
+        this.y = location.y;
+        this.z = location.z;
+        return this
+    }
+
+    clone() {
+        return new Location(this.floor, this.x, this.y, this.z)
     }
 }
 
@@ -49944,7 +51079,39 @@ class Point {
 }
 
 class Overlay {
-    constructor() {}
+    constructor() {
+        const position = new Vector3();
+        const location = new Location();
+        Object.defineProperties(this, {
+            worldPosition: {
+                enumerable: true,
+                configurable: true,
+                get: function() {
+                    let ret = undefined;
+                    if (this.object3D && this.object3D.parent) {
+                        if (this.object3D.isSprite || this.object3D.isPoints) {
+                            ret = this.object3D.parent.localToWorld(position.copy(this.object3D.position));
+                        } else if (this.object3D.geometry) {
+                            this.object3D.geometry.computeBoundingBox();
+                            ret = this.object3D.geometry.boundingBox.getCenter(position);
+                        }
+                    }
+                    return ret
+                },
+            },
+            location: {
+                enumerable: true,
+                configurable: true,
+                get: function() {
+                    if (this.worldPosition) {
+                        return location.copy(this.worldPosition).setFloor(this.floor)
+                    } else {
+                        return null
+                    }
+                },
+            },
+        });
+    }
 
     show() {
         this.visible = true;
@@ -49958,11 +51125,6 @@ class Overlay {
         if (this.object3D && this.object3D.parent) {
             this.object3D.parent.remove(this.object3D);
         }
-    }
-
-    setLocation(location /*, animate*/) {
-        this.currentLocation = location;
-        this.object3D.position.copy(location.localPosition);
     }
 }
 
@@ -49988,17 +51150,60 @@ Object.defineProperties(Overlay.prototype, {
 });
 
 class HTMLOverlay extends Overlay {
-    constructor(location, options) {
+    constructor(location, options = {}) {
         super();
 
-        this.location = location;
         this.options = options;
-        
+
         if (typeof this.initialize !== 'function' || typeof this.render !== 'function') {
             throw new Error('initialize && render must be implements')
         }
-        this.$el = this.initialize();
+
+        Object.defineProperties(this, {
+            location: {
+                enumerable: true,
+                configurable: true,
+                value: location,
+            },
+            $el: {
+                configurable: false,
+                writable: false,
+                value: this.initialize(),
+            },
+        });
     }
+
+    setOptions(options = {}) {
+        this.options = { ...this.options, ...options };
+    }
+
+    setLocation(location) {
+        Object.defineProperties(this, {
+            location: {
+                enumerable: true,
+                configurable: true,
+                value: location,
+            },
+        });
+    }
+
+    // show() {
+    //     this.visible = true
+    // }
+
+    // hide() {
+    //     this.visible = false
+    // }
+
+    // get visible() {
+    //     return this.$el && this.$el.style.display !== 'none'
+    // }
+
+    // set visible(value) {
+    //     if (this.$el) {
+    //         this.$el.style.display = value ? 'block' : 'none'
+    //     }
+    // }
 }
 
 Object.defineProperties(HTMLOverlay.prototype, {
@@ -50037,6 +51242,39 @@ function bounceEasing(count = 1, decay = 0.5, delay = 0) {
 const MARKER_SIZE = new Vector2(20, 20);
 const __options__$1 = new WeakMap();
 
+function initObject3D(obj, location) {
+    let { icon, size, offset } = __options__$1.get(obj);
+    size = size || MARKER_SIZE;
+    size.ceil();
+    let texture = new TextureLoader().load(icon, t => {
+        t.needsUpdate = true;
+    });
+    texture.minFilter = LinearFilter;
+    let material = new SpriteMaterial({
+        map: texture,
+        sizeAttenuation: false,
+        transparent: true,
+        alphaTest: 0.1,
+        depthTest: false,
+    });
+
+    let sprite = new XSprite(material);
+    sprite.width = size.width;
+    sprite.height = size.height;
+    sprite.position.copy(location.localPosition);
+    sprite.handler = obj;
+    sprite.type = 'Marker';
+    if (offset) {
+        sprite.center.set(0.5 - offset.x / size.width, 0.5 + offset.y / size.height);
+    } else {
+        sprite.center.set(0.5, 0.5);
+    }
+    sprite.scale.set(1e-7, 1e-7, 1);
+    sprite.renderOrder = 20;
+    sprite.onViewModeChange = is3dMode => sprite.position.setZ(is3dMode ? location.z : 4);
+    return sprite
+}
+
 class Marker extends Overlay {
     constructor(location, options = {}) {
         super();
@@ -50044,18 +51282,24 @@ class Marker extends Overlay {
         this.setOptions(options);
 
         this.currentLocation = location;
-        this.location = location;
         this.floor = location.floor;
         this.position = location.localPosition;
 
-        this.initObject3D();
+        Object.defineProperties(this, {
+            object3D: {
+                configurable: false,
+                writable: false,
+                value: initObject3D(this, location),
+            },
+        });
     }
 
     setOptions({ icon, size, offset }) {
+        let { icon: oldIcon } = __options__$1.get(this);
         if (typeof icon !== 'undefined') __options__$1.get(this).icon = icon;
         if (typeof size !== 'undefined') __options__$1.get(this).size = size;
         if (typeof offset !== 'undefined') __options__$1.get(this).offset = offset;
-        if (this.object3D && icon) {
+        if (this.object3D && icon && icon !== oldIcon) {
             new TextureLoader().load(icon, t => {
                 t.needsUpdate = true;
                 t.minFilter = LinearFilter;
@@ -50067,7 +51311,7 @@ class Marker extends Overlay {
         }
     }
 
-    jump({ repeat = -1, duration = 1, delay = 0, height = 40 } = {}) {
+    jump({ repeat = -1, duration = 1000, delay = 0, height = 40 } = {}) {
         this.jumpStop();
         if (duration < 1e-3) {
             duration = 1;
@@ -50077,7 +51321,6 @@ class Marker extends Overlay {
             height = 40;
         }
         let revert = () => {
-            console.log(111111);
             let { offset } = __options__$1.get(this);
             if (this.object3D && offset) {
                 this.object3D.center.set(0.5 - offset.x / this.object3D.width, 0.5 + offset.y / this.object3D.height);
@@ -50085,7 +51328,7 @@ class Marker extends Overlay {
             this._animation_ = undefined;
         };
         this._animation_ = new TWEEN.Tween(this.object3D.center)
-            .to({ y: -height / this.object3D.height }, (duration + delay) * 1000)
+            .to({ y: -height / this.object3D.height }, duration + delay)
             .easing(bounceEasing(3, 0.4, delay / (duration + delay)))
             .repeat(repeat > -1 ? repeat : Infinity)
             .onStop(revert)
@@ -50099,38 +51342,19 @@ class Marker extends Overlay {
         }
     }
 
-    initObject3D() {
-        let { icon, size, offset } = __options__$1.get(this);
-        size = size || MARKER_SIZE;
-        size.ceil();
-        let texture = new TextureLoader().load(icon, t => {
-            t.needsUpdate = true;
-        });
-        texture.minFilter = LinearFilter;
-        let material = new SpriteMaterial({
-            map: texture,
-            sizeAttenuation: false,
-            transparent: true,
-            alphaTest: 0.1,
-            depthTest: false,
-        });
-
-        let sprite = new XSprite(material);
-        sprite.width = size.width;
-        sprite.height = size.height;
-        sprite.position.copy(this.position);
-        sprite.handler = this;
-        sprite.type = 'Marker';
-        if (offset) {
-            sprite.center.set(0.5 - offset.x / size.width, 0.5 + offset.y / size.height);
-        } else {
-            sprite.center.set(0.5, 0.5);
+    setLocation(location /*, animate*/) {
+        this.currentLocation = location;
+        this.object3D.position.copy(location.localPosition);
+        let floor = this.object3D.parent;
+        if (floor && floor.isFloor && floor.name != location.floor) {
+            let newFloor = floor.parent.getFloor(location.floor);
+            if (newFloor) {
+                floor.remove(this.object3D);
+                newFloor.add(this.object3D);
+            } else {
+                throw new Error('invalid floor')
+            }
         }
-        sprite.renderOrder = 10;
-        sprite.scale.set(1e-7, 1e-7, 1);
-        sprite.onViewModeChange = is3dMode => sprite.position.setZ(is3dMode ? this.currentLocation.z : 4);
-        this.object3D = sprite;
-        return sprite
     }
 }
 
@@ -50142,6 +51366,143 @@ Object.defineProperties(Marker.prototype, {
     },
 });
 
+const __options__$2 = new WeakMap();
+
+function initObject3D$1(obj, points) {
+    let { lineColor, lineWidth } = __options__$2.get(obj);
+
+    let material = new LineMaterial({
+        color: lineColor,
+        lineWidth: lineWidth,
+    });
+    points = points.map(it => it.localPosition.setZ(2));
+    if (closed) {
+        points.push(points[0]);
+    }
+    let geometry = new LineGeometry().setFromPoints(points);
+    let line = new Line2(geometry, material);
+    line.handler = obj;
+    return line
+}
+
+class Polyline extends Overlay {
+    constructor(points, options) {
+        super();
+        __options__$2.set(this, {});
+        this.setOptions(options);
+
+        Object.defineProperties(this, {
+            object3D: {
+                configurable: false,
+                writable: false,
+                value: initObject3D$1(this, points),
+            },
+            floor: {
+                value: points[0].floor,
+            },
+        });
+    }
+
+    setOptions({ lineColor = 'white', lineWidth = 3 } = {}) {
+        let options = __options__$2.get(this);
+        options.lineColor = new Color(lineColor);
+        options.lineWidth = Number(lineWidth);
+    }
+}
+
+const __options__$3 = new WeakMap();
+
+function parsePoints$1(points) {
+    if (Array.isArray(points)) {
+        return points.map(it => new Vector3().copy(it).setZ(0))
+    } else if (points.type) {
+        let {
+            type,
+            center: { x, y },
+        } = points;
+        if (type === 'rectangle') {
+            let { width, height } = points;
+            let hw = width;
+            let hh = height;
+            return [
+                new Vector3(x - hw, y - hh, 0),
+                new Vector3(x - hw, y + hh, 0),
+                new Vector3(x + hw, y + hh, 0),
+                new Vector3(x + hw, y - hh, 0),
+            ]
+        } else if (type === 'circle') {
+            let { radius, segments = 40 } = points;
+            let curve = new EllipseCurve(x, y, radius, radius);
+            return curve.getPoints(segments)
+        } else {
+            throw new Error('invalid points')
+        }
+    }
+}
+
+function initObject3D$2(obj, points) {
+    let { color, alpha, lineColor, lineWidth } = __options__$3.get(obj);
+
+    points = parsePoints$1(points);
+
+    let shape = new Shape(points);
+    let geometry = new ShapeGeometry(shape);
+    let material = new MeshPhongMaterial({
+        color,
+        transparent: true,
+        opacity: alpha,
+        depthWrite: false,
+    });
+    let polygon = new Mesh(geometry, material);
+    if (lineWidth > 0) {
+        let material = new LineMaterial({
+            color: lineColor,
+            lineWidth: lineWidth,
+        });
+        points.push(points[0]);
+        let geometry = new LineGeometry().setFromPoints(points);
+        let line = new Line2(geometry, material);
+        line.position.setZ(0.1);
+        polygon.add(line);
+    }
+    polygon.handler = obj;
+    polygon.position.setZ(60);
+    polygon.onViewModeChange = is3dMode => {
+        // polygon.material.depthTest = is3dMode
+        polygon.position.setZ(is3dMode ? 60 : 3);
+    };
+    polygon.renderOrder = 10;
+    return polygon
+}
+
+class Polygon extends Overlay {
+    constructor(options) {
+        super();
+        __options__$3.set(this, {});
+        this.setOptions(options);
+        let { points, floor } = options;
+
+        Object.defineProperties(this, {
+            object3D: {
+                configurable: false,
+                writable: false,
+                value: initObject3D$2(this, points),
+            },
+            floor: {
+                value: floor,
+            },
+        });
+    }
+
+    setOptions({ color = 'white', alpha = 0.5, lineColor = 'white', lineWidth = 1 }) {
+        let options = __options__$3.get(this);
+        options.color = new Color(color);
+        options.alpha = parseFloat(alpha);
+        options.lineColor = new Color(lineColor);
+        options.lineWidth = parseInt(lineWidth);
+    }
+}
+
 class HTMLInfoWindow extends HTMLOverlay {
     initialize() {
         let span = document.createElement('span');
@@ -50151,14 +51512,36 @@ class HTMLInfoWindow extends HTMLOverlay {
         span.style.padding = '3px 4px';
         span.style.width = '130px';
         span.style.fontSize = '14px';
-        span.appendChild(document.createTextNode(this.options.content));
+        let textNode = document.createTextNode(this.options.content);
+        span.appendChild(textNode);
+        Object.defineProperties(this, {
+            textNode: {
+                configurable: false,
+                writable: false,
+                value: textNode,
+            },
+        });
         return span
     }
 
-    render(position) {
-        this.$el.style.left = position.x + 'px';
-        this.$el.style.top = position.y - this.$el.clientHeight + 'px';
-        this.$el.style.zIndex = position.zIndex;
+    render({ x, y, zIndex, visible }) {
+        if (visible) {
+            let { offset: { x: offsetX = 0, y: offsetY = 0 } = {} } = this.options || {};
+
+            this.$el.style.left = x + offsetX + 'px';
+            this.$el.style.top = y - this.$el.clientHeight + offsetY + 'px';
+            this.$el.style.zIndex = zIndex;
+            this.$el.style.display = 'block';
+        } else {
+            this.$el.style.display = 'none';
+        }
+    }
+
+    setOptions(options = {}) {
+        super.setOptions(options);
+        if (options.content) {
+            this.textNode.replaceWith(options.content);
+        }
     }
 }
 
@@ -50170,4 +51553,4 @@ Object.defineProperties(HTMLInfoWindow.prototype, {
     },
 });
 
-export { XMap as Map, REVISION$1 as REVISION, ViewMode, Location, Point, Overlay, HTMLOverlay, Marker, HTMLInfoWindow };
+export { XMap as Map, REVISION$1 as REVISION, ViewMode, Location, Point, Overlay, HTMLOverlay, Marker, Polyline, Polygon, HTMLInfoWindow };

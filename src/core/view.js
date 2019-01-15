@@ -8,9 +8,10 @@ import {
     AmbientLight,
     DirectionalLight,
     Raycaster,
-} from '../libs/threejs/index'
+} from '../libs/threejs'
 import { addEvent } from '../utils/event'
 import TWEEN from '../libs/Tween'
+import { updateOverlays } from './overlays'
 
 const PERSPECTIVE_FOV = 20
 
@@ -20,28 +21,7 @@ const __camera__ = new WeakMap()
 
 function updateModels(mo) {
     if (mo.mapScene) mo.mapScene.boundNeedsUpdate = true
-    Array.from(mo._overlays)
-        .filter(it => it.isHTMLOverlay)
-        .map(it => ({
-            overlay: it,
-            position: mo.locationToViewport(it.location),
-        }))
-        .sort((a, b) => b.position.distance - a.position.distance)
-        .forEach((it, index) => {
-            if (it.position.distance === Infinity) {
-                it.overlay.render({
-                    x: 0,
-                    y: 0,
-                    zIndex: -100,
-                })
-            } else {
-                it.overlay.render({
-                    x: it.position.x,
-                    y: it.position.y,
-                    zIndex: index + 10,
-                })
-            }
-        })
+    updateOverlays(mo)
 }
 
 function render(mo) {
@@ -53,19 +33,22 @@ function render(mo) {
         scene = __scene__.get(mo),
         camera = __camera__.get(mo)
 
+    let rerender = false
     if (mo.needsUpdate) {
         mo._update_(scene, camera)
         camera.updateProjectionMatrix()
         mo.updateProjectionMatrix = true
-        updateModels(mo)
+        rerender = true
     } else if (mo.updateProjectionMatrix) {
         mo.updateProjectionMatrix = false
-        updateModels(mo)
+        rerender = true
     }
-
-    renderer.clear()
-    renderer.render(scene, camera)
-    renderer.clearDepth()
+    if (rerender) {
+        updateModels(mo)
+        renderer.clearColor()
+        renderer.render(scene, camera)
+        renderer.clearDepth()
+    }
 }
 
 export function changeTheme(mo, theme) {
@@ -133,10 +116,9 @@ export function viewMixin(XMap) {
 
 function initDom(mo) {
     mo.$mapWrapper = document.createElement('div')
-    mo.$mapWrapper.style.overflow = 'hidden'
-    mo.$mapWrapper.style.width = '100%'
-    mo.$mapWrapper.style.height = '100%'
+    mo.$mapWrapper.className = 'xmap-container'
     mo.$wrapper.appendChild(mo.$mapWrapper)
+    mo.$mapWrapper.style.opacity = 0
 
     mo.$overlayWrapper = document.createElement('div')
     mo.$overlayWrapper.className = 'xmap-overlays'
@@ -175,10 +157,12 @@ function initThree(mo) {
 
     let renderer = new WebGLRenderer({
         antialias: true,
-        alpha: true,
+        // alpha: true,
     })
     renderer.autoClear = false
-    renderer.setClearColor('#ffffff')
+    renderer.autoClearColor = false
+    renderer.autoClearDepth = false
+    renderer.autoClearStencil = false
     renderer.setSize(width, height)
     __renderer__.set(mo, renderer)
 
@@ -226,6 +210,8 @@ export function initView(mo) {
 export function clearRenderer(mo, color, alpha) {
     let renderer = __renderer__.get(mo)
     renderer.setClearColor(color, alpha)
+    if (!mo.mapScene) renderer.clearColor()
+    mo.$mapWrapper.style.opacity = 1
 }
 
 export function loadModel(mo, model) {
