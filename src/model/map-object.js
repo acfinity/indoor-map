@@ -1,6 +1,6 @@
-import { eventMixin } from '../core/event'
+import { eventMixin } from '../core/events'
 
-export const mixinMapObject = function(Class) {
+export function mixinMapObject(Class) {
     eventMixin(Class)
     Object.defineProperties(Class.prototype, {
         isMapObject: {

@@ -14,13 +14,13 @@ function updateHTMLOverlay(mo, overlay) {
     }
 }
 
-export function updateOverlays(mo) {
+function updateOverlays(mo) {
     Array.from(mo._overlays)
         .filter(it => it.isHTMLOverlay)
         .forEach(it => updateHTMLOverlay(mo, it))
 }
 
-export function overlayMixin(XMap) {
+function overlayMixin(XMap) {
     Object.assign(XMap.prototype, {
         addOverlay(overlay) {
             if (overlay) {
@@ -59,7 +59,7 @@ export function overlayMixin(XMap) {
                     let floorObj = this.mapScene.getFloor(overlay.floor)
                     if (floorObj) {
                         floorObj.add(overlay.object3D)
-                        this.needsUpdate = true
+                        this.forceUpdate()
                     } else {
                         throw new Error('invalid floor')
                     }
@@ -79,3 +79,5 @@ export function overlayMixin(XMap) {
         },
     })
 }
+
+export { overlayMixin, updateOverlays }

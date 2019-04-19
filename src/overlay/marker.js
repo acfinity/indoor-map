@@ -120,7 +120,7 @@ class Marker extends Overlay {
                 throw new Error('invalid floor')
             }
         }
-        if (this.$map) this.$map.needsUpdate = true
+        if (this.$map) this.$map.forceUpdate()
     }
 }
 

@@ -1,6 +1,6 @@
 {
     "name": "light",
-    "background":"blue",
+    "background":"#ffffff",
     "building": { "color": "#000000", "opacity": 0.1, "transparent": true },
     "floor": { "color": "#fcfcfc", "opacity": 1, "transparent": false },
     "selected": "#ffff55",

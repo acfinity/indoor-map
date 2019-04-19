@@ -11,7 +11,7 @@ const ANIMATE_DURATION = 150
 const MAX_SCALE = 5
 const MIN_SCALE = 0.2
 
-export function initState(mo) {
+function initState(mo) {
     let {
         rotateAngle = 0,
         tiltAngle = 60,
@@ -20,6 +20,7 @@ export function initState(mo) {
         showAllFloors = false,
         showNames = true,
         showPubPoints = true,
+        backgroundColor,
     } = mo.options
     let state = {
         rotateAngle: rotateAngle,
@@ -33,6 +34,7 @@ export function initState(mo) {
         showAllFloors: !!showAllFloors,
         showNames: !!showNames,
         showPubPoints: !!showPubPoints,
+        backgroundColor,
     }
     let resetState = {
         ...state,
@@ -99,7 +101,7 @@ function _transform_(mo, name, value, duration, callback) {
     }
 }
 
-export function stateMixin(XMap) {
+function stateMixin(XMap) {
     Object.assign(XMap.prototype, {
         reset() {
             let state = __mapState__.get(this)
@@ -249,6 +251,10 @@ export function stateMixin(XMap) {
             this.dispatchEvent({ type: 'stateChanged' })
         },
 
+        forceUpdate() {
+            __mapState__.get(this).needsUpdate = true
+        },
+
         _scale_(scalar) {
             let scale = __mapState__.get(this).scale * scalar
             scale = Math.min(MAX_SCALE, Math.max(MIN_SCALE, scale))
@@ -318,9 +324,6 @@ export function stateMixin(XMap) {
                 let { needsUpdate = true } = __mapState__.get(this)
                 return needsUpdate || __animationList__.get(this).size > 0
             },
-            set: function(value) {
-                __mapState__.get(this).needsUpdate = !!value
-            },
         },
         currentFloor: {
             get: function() {
@@ -356,5 +359,12 @@ export function stateMixin(XMap) {
                 __mapState__.get(this).needsUpdate = true
             },
         },
+        backgroundColor: {
+            get: function() {
+                return __mapState__.get(this).backgroundColor || this.getMapStyle().background || 'white'
+            },
+        },
     })
 }
+
+export { stateMixin, initState }

@@ -1,4 +1,4 @@
-import { eventMixin } from '../core/event'
+import { eventMixin } from '../core/events'
 import { Vector3 } from '../libs/threejs'
 import Location from '../model/location'
 
@@ -48,7 +48,7 @@ class Overlay {
     removeFromParent() {
         if (this.object3D && this.object3D.parent) {
             this.object3D.parent.remove(this.object3D)
-            if (this.$map) this.$map.needsUpdate = true
+            if (this.$map) this.$map.forceUpdate()
         }
     }
 }

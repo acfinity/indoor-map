@@ -11,23 +11,16 @@ function changeTheme(mo, theme) {
             object.children.forEach(obj => changeTheme(obj))
         }
     }
-    let { background = '#f9f9f9' } = theme
-    if (typeof background === 'object') {
-        let { color, alpha = 1 } = background
-        clearRenderer(mo, color, alpha)
-    } else {
-        if (typeof background !== 'string') {
-            background = '#f9f9f9'
-        }
-        clearRenderer(mo, background, 1)
-    }
+
+    clearRenderer(mo, mo.backgroundColor)
+
     if (mo.mapScene) {
         mo.mapScene.boundNeedsUpdate = true
         changeTheme(mo.mapScene)
     }
 }
 
-export function loaderMixin(XMap) {
+function loaderMixin(XMap) {
     Object.assign(XMap.prototype, {
         load(fileName) {
             return new Promise((resolve, reject) => {
@@ -39,10 +32,10 @@ export function loaderMixin(XMap) {
                         changeTheme(this, this.themeLoader.getTheme(__currentTheme__.get(this)))
 
                         mapScene.showFloor('F1')
-                        
+
                         this.dispatchEvent({ type: 'mapLoaded' })
                         resolve(this)
-                        
+
                         this._overlays.forEach(overlay => this._addOverlay(overlay))
                     })
                     .catch(e => reject(e))
@@ -65,12 +58,14 @@ export function loaderMixin(XMap) {
         },
 
         getMapStyle() {
-            return this.themeLoader.getTheme()
+            return this.themeLoader.getTheme(__currentTheme__.get(this))
         },
     })
 }
 
-export function initLoaders(mo) {
+function initLoaders(mo) {
     mo.mapLoader = new MapLoader(false)
     mo.themeLoader = themeLoader
 }
+
+export { loaderMixin, initLoaders }

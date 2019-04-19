@@ -27,13 +27,12 @@ function updateModels(mo) {
 function render(mo) {
     requestAnimationFrame(() => render(mo))
     if (!mo.mapScene) return
-    TWEEN.update()
 
     let renderer = __renderer__.get(mo),
         scene = __scene__.get(mo),
         camera = __camera__.get(mo)
 
-    let rerender = false
+    let rerender = TWEEN.update()
     if (mo.needsUpdate) {
         mo._update_(scene, camera)
         camera.updateProjectionMatrix()
@@ -51,7 +50,7 @@ function render(mo) {
     }
 }
 
-export function changeTheme(mo, theme) {
+function changeTheme(mo, theme) {
     function changeTheme(object) {
         if (object.onThemeChange) object.onThemeChange(theme)
         if (object.children && object.children.length > 0) {
@@ -71,7 +70,7 @@ export function changeTheme(mo, theme) {
     mo.mapScene && changeTheme(mo.mapScene)
 }
 
-export function viewMixin(XMap) {
+function viewMixin(XMap) {
     Object.assign(XMap.prototype, {
         clear() {
             this.mapScene && __scene__.get(this).remove(this.mapScene)
@@ -79,7 +78,9 @@ export function viewMixin(XMap) {
             this.clearOverlays()
             __renderer__.get(this).clear()
         },
-
+        resize() {
+            onMapResize(this)
+        },
         locationToViewport: (function() {
             const worldPosition = new Vector3()
             const screenPosition = new Vector4()
@@ -200,21 +201,21 @@ function onMapResize(mo) {
     mo.updateProjectionMatrix = true
 }
 
-export function initView(mo) {
+function initView(mo) {
     initDom(mo)
     initThree(mo)
 
     addEvent(window, 'resize', () => onMapResize(mo))
 }
 
-export function clearRenderer(mo, color, alpha) {
+function clearRenderer(mo, color, alpha) {
     let renderer = __renderer__.get(mo)
     renderer.setClearColor(color, alpha)
     if (!mo.mapScene) renderer.clearColor()
     mo.$mapWrapper.style.opacity = 1
 }
 
-export function loadModel(mo, model) {
+function loadModel(mo, model) {
     if (!model) return
     Object.defineProperties(model, {
         $map: {
@@ -228,11 +229,11 @@ export function loadModel(mo, model) {
     scene.add(model)
 }
 
-export function startRenderer(mo) {
+function startRenderer(mo) {
     render(mo)
 }
 
-export const getCameraRaycast = (function() {
+const getCameraRaycast = (function() {
     const raycaster = new Raycaster()
     const vector = new Vector3(0, 0, 0.5)
 
@@ -243,3 +244,5 @@ export const getCameraRaycast = (function() {
         return raycaster
     }
 })()
+
+export { viewMixin, initView, clearRenderer, startRenderer, getCameraRaycast, loadModel, changeTheme }

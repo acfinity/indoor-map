@@ -161,6 +161,7 @@ class GestureControl {
         const point = e.touches ? e.touches[0] : e
 
         this.startPosition.set(point.offsetX, point.offsetY)
+        this.endPosition.copy(this.startPosition)
         this.startPosition2.set(point.clientX, point.clientY)
     }
 
@@ -170,29 +171,30 @@ class GestureControl {
             const point = e.touches ? e.touches[0] : e
 
             this.endPosition
-                .set(point.clientX, point.clientY)
+                .set(this.endPosition.x + point.clientX, this.endPosition.y + point.clientY)
                 .sub(this.startPosition2)
-                .add(this.startPosition)
             this.startPosition2.set(point.clientX, point.clientY)
             this.deltaVector.subVectors(this.endPosition, this.startPosition)
-            if (this.deltaVector.length() == 0) {
-                return
-            }
-            if (this.state === STATE.RIGHT_CLICK || this.state === STATE.ROTATE) {
-                this.state = STATE.ROTATE
-                this.rotateLeft(((360 * this.deltaVector.x) / PIXELS_PER_ROUND) * userRotateSpeed)
-                this.rotateUp(((360 * this.deltaVector.y) / PIXELS_PER_ROUND) * userRotateSpeed)
-            } else if (this.state === STATE.ZOOM) {
-                if (this.deltaVector.y > 0) {
-                    this.$map.zoomOut(1 / TOUCH_SCALE_STEP)
-                } else {
-                    this.$map.zoomIn(TOUCH_SCALE_STEP)
+            const delta = this.deltaVector.length()
+            if (delta > 0) {
+                if (this.state === STATE.RIGHT_CLICK || this.state === STATE.ROTATE) {
+                    this.state = STATE.ROTATE
+                    this.rotateLeft(((360 * this.deltaVector.x) / PIXELS_PER_ROUND) * userRotateSpeed)
+                    this.rotateUp(((360 * this.deltaVector.y) / PIXELS_PER_ROUND) * userRotateSpeed)
+                } else if (this.state === STATE.ZOOM) {
+                    if (this.deltaVector.y > 0) {
+                        this.$map.zoomOut(1 / TOUCH_SCALE_STEP)
+                    } else {
+                        this.$map.zoomIn(TOUCH_SCALE_STEP)
+                    }
+                } else if ((this.state === STATE.CLICK && delta > 2) || this.state === STATE.PAN) {
+                    this.state = STATE.PAN
+                    this.pan(this.startPosition, this.endPosition)
                 }
-            } else if (this.state === STATE.CLICK || this.state === STATE.PAN) {
-                this.state = STATE.PAN
-                this.pan(this.startPosition, this.endPosition)
+                if (this.state !== STATE.CLICK) {
+                    this.startPosition.copy(this.endPosition)
+                }
             }
-            this.startPosition.copy(this.endPosition)
         }
         if (this.onHoverListener && this.wrapper.contains(e.target)) {
             this.onHoverListener(e)

@@ -1,6 +1,6 @@
 import { Vector2 } from '../libs/threejs'
 
-export const parsePoints = array => {
+const parsePoints = array => {
     var points = []
     for (var i = 0; i < array.length; i += 2) {
         var point = new Vector2(array[i], array[i + 1])
@@ -15,7 +15,7 @@ export const parsePoints = array => {
     return points
 }
 
-export const appendHTML = function(element, html) {
+const appendHTML = function(element, html) {
     var divTemp = document.createElement('div'),
         nodes = null,
         fragment = document.createDocumentFragment()
@@ -29,3 +29,5 @@ export const appendHTML = function(element, html) {
     nodes = null
     fragment = null
 }
+
+export { parsePoints, appendHTML }

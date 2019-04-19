@@ -38,7 +38,7 @@ module.exports = merge(baseWebpackConfig, {
     ],
     devServer: {
         contentBase: path.resolve(__dirname, '../dist'), // 配置开发服务运行时的文件根目录
-        host: '192.168.1.222', // 开发服务器监听的主机地址
+        host: '127.0.0.1', // 开发服务器监听的主机地址
         compress: true, // 开发服务器是否启动gzip等压缩
         port: config.dev.port, // 开发服务器监听的端口
     },

@@ -1,4 +1,4 @@
-export default class BaseControl {
+class BaseControl {
     constructor(mm) {
         if (typeof mm !== 'object' || !mm.isMap) {
             throw new Error('params error')
@@ -10,3 +10,5 @@ export default class BaseControl {
 
     onRemove() {}
 }
+
+export default BaseControl

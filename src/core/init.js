@@ -1,7 +1,7 @@
 import GestureControl from '../controls/gesture-control'
 import FloorControl from '../controls/floor-control'
 import { initView, startRenderer } from './view'
-import { initEvent } from './event'
+import { initEvents } from './events'
 import { initLoaders } from './loader'
 import { initState } from './state'
 
@@ -20,20 +20,20 @@ export function initMixin(XMap) {
 
             Object.defineProperties(this, {
                 gestureControl: {
-                    configurable:false,
+                    configurable: false,
                     writable: false,
                     enumerable: false,
-                    value: new GestureControl(this)
+                    value: new GestureControl(this),
                 },
                 floorControl: {
-                    configurable:false,
+                    configurable: false,
                     writable: false,
                     enumerable: false,
-                    value: new FloorControl(this)
-                }
+                    value: new FloorControl(this),
+                },
             })
 
-            initEvent(this)
+            initEvents(this)
 
             initLoaders(this)
             startRenderer(this)
@@ -42,7 +42,7 @@ export function initMixin(XMap) {
     Object.defineProperties(XMap.prototype, {
         isMap: {
             writable: false,
-            value: true
-        }
+            value: true,
+        },
     })
 }

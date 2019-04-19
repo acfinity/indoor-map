@@ -2,7 +2,7 @@ import { Vector2 } from '../libs/threejs'
 import { mixinMapObject } from './map-object'
 import XSprite from '../objects/XSprite'
 
-export const PUB_POINT_SIZE = new Vector2(24, 24)
+const PUB_POINT_SIZE = new Vector2(24, 24)
 
 class PubPoint extends XSprite {
     constructor(attr, floor) {
@@ -53,3 +53,5 @@ Object.defineProperties(PubPoint.prototype, {
 })
 
 export default PubPoint
+
+export { PUB_POINT_SIZE }

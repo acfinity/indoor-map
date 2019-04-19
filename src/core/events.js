@@ -5,7 +5,7 @@ import MapEvent from '../model/map-event'
 const __preHover__ = new WeakMap()
 const __pickMode__ = new WeakMap()
 
-export function eventMixin(Class) {
+function eventMixin(Class) {
     if (!Class.prototype.dispatchEvent) {
         Object.assign(Class.prototype, EventDispatcher.prototype)
     }
@@ -158,7 +158,7 @@ function updateCursor(mo, intersects) {
     mo.$mapWrapper.classList[overlay ? 'add' : 'remove']('clickable')
 }
 
-export const initEvent = function(mo) {
+function initEvents(mo) {
     mo.gestureControl.onClickListener = e => {
         if (__pickMode__.get(mo) && e.button !== 0) return
         let eventType = e.button === 0 ? 'click' : 'rightClick'
@@ -204,3 +204,5 @@ export const initEvent = function(mo) {
         dispatchMapEvent(mo, 'hover', e, intersects, overlay)
     }
 }
+
+export { eventMixin, initEvents }

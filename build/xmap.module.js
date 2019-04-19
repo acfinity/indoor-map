@@ -23,8 +23,11 @@ function updateOverlays(mo) {
 function overlayMixin(XMap) {
     Object.assign(XMap.prototype, {
         addOverlay(overlay) {
-            this._overlays.add(overlay);
-            this._addOverlay(overlay);
+            if (overlay) {
+                Object.defineProperty(overlay, '$map', { writable: false, value: this });
+                this._overlays.add(overlay);
+                this._addOverlay(overlay);
+            }
         },
 
         removeOverlay(...overlays) {
@@ -56,6 +59,7 @@ function overlayMixin(XMap) {
                     let floorObj = this.mapScene.getFloor(overlay.floor);
                     if (floorObj) {
                         floorObj.add(overlay.object3D);
+                        this.forceUpdate();
                     } else {
                         throw new Error('invalid floor')
                     }
@@ -76,13 +80,13 @@ function overlayMixin(XMap) {
     });
 }
 
-const addEvent = (el, type, fn, capture) => {
+function addEvent(el, type, fn, capture) {
     el.addEventListener(type, fn, capture);
-};
+}
 
-const removeEvent = (el, type, fn, capture) => {
+function removeEvent(el, type, fn, capture) {
     el.removeEventListener(type, fn, capture);
-};
+}
 
 // Polyfills
 
@@ -48626,25 +48630,27 @@ function updateModels(mo) {
 function render(mo) {
     requestAnimationFrame(() => render(mo));
     if (!mo.mapScene) return
-    TWEEN.update();
 
     let renderer = __renderer__.get(mo),
         scene = __scene__.get(mo),
         camera = __camera__.get(mo);
 
+    let rerender = TWEEN.update();
     if (mo.needsUpdate) {
         mo._update_(scene, camera);
         camera.updateProjectionMatrix();
         mo.updateProjectionMatrix = true;
-        updateModels(mo);
+        rerender = true;
     } else if (mo.updateProjectionMatrix) {
         mo.updateProjectionMatrix = false;
-        updateModels(mo);
+        rerender = true;
     }
-
-    renderer.clear();
-    renderer.render(scene, camera);
-    renderer.clearDepth();
+    if (rerender) {
+        updateModels(mo);
+        renderer.clearColor();
+        renderer.render(scene, camera);
+        renderer.clearDepth();
+    }
 }
 
 function viewMixin(XMap) {
@@ -48655,7 +48661,9 @@ function viewMixin(XMap) {
             this.clearOverlays();
             __renderer__.get(this).clear();
         },
-
+        resize() {
+            onMapResize(this);
+        },
         locationToViewport: (function() {
             const worldPosition = new Vector3();
             const screenPosition = new Vector4();
@@ -48694,6 +48702,7 @@ function initDom(mo) {
     mo.$mapWrapper = document.createElement('div');
     mo.$mapWrapper.className = 'xmap-container';
     mo.$wrapper.appendChild(mo.$mapWrapper);
+    mo.$mapWrapper.style.opacity = 0;
 
     mo.$overlayWrapper = document.createElement('div');
     mo.$overlayWrapper.className = 'xmap-overlays';
@@ -48732,10 +48741,12 @@ function initThree(mo) {
 
     let renderer = new WebGLRenderer({
         antialias: true,
-        alpha: true,
+        // alpha: true,
     });
     renderer.autoClear = false;
-    renderer.setClearColor('#ffffff');
+    renderer.autoClearColor = false;
+    renderer.autoClearDepth = false;
+    renderer.autoClearStencil = false;
     renderer.setSize(width, height);
     __renderer__.set(mo, renderer);
 
@@ -48783,6 +48794,8 @@ function initView(mo) {
 function clearRenderer(mo, color, alpha) {
     let renderer = __renderer__.get(mo);
     renderer.setClearColor(color, alpha);
+    if (!mo.mapScene) renderer.clearColor();
+    mo.$mapWrapper.style.opacity = 1;
 }
 
 function loadModel(mo, model) {
@@ -48974,6 +48987,7 @@ class GestureControl {
         const point = e.touches ? e.touches[0] : e;
 
         this.startPosition.set(point.offsetX, point.offsetY);
+        this.endPosition.copy(this.startPosition);
         this.startPosition2.set(point.clientX, point.clientY);
     }
 
@@ -48983,29 +48997,30 @@ class GestureControl {
             const point = e.touches ? e.touches[0] : e;
 
             this.endPosition
-                .set(point.clientX, point.clientY)
-                .sub(this.startPosition2)
-                .add(this.startPosition);
+                .set(this.endPosition.x + point.clientX, this.endPosition.y + point.clientY)
+                .sub(this.startPosition2);
             this.startPosition2.set(point.clientX, point.clientY);
             this.deltaVector.subVectors(this.endPosition, this.startPosition);
-            if (this.deltaVector.length() == 0) {
-                return
-            }
-            if (this.state === STATE.RIGHT_CLICK || this.state === STATE.ROTATE) {
-                this.state = STATE.ROTATE;
-                this.rotateLeft(((360 * this.deltaVector.x) / PIXELS_PER_ROUND) * userRotateSpeed);
-                this.rotateUp(((360 * this.deltaVector.y) / PIXELS_PER_ROUND) * userRotateSpeed);
-            } else if (this.state === STATE.ZOOM) {
-                if (this.deltaVector.y > 0) {
-                    this.$map.zoomOut(1 / TOUCH_SCALE_STEP);
-                } else {
-                    this.$map.zoomIn(TOUCH_SCALE_STEP);
+            const delta = this.deltaVector.length();
+            if (delta > 0) {
+                if (this.state === STATE.RIGHT_CLICK || this.state === STATE.ROTATE) {
+                    this.state = STATE.ROTATE;
+                    this.rotateLeft(((360 * this.deltaVector.x) / PIXELS_PER_ROUND) * userRotateSpeed);
+                    this.rotateUp(((360 * this.deltaVector.y) / PIXELS_PER_ROUND) * userRotateSpeed);
+                } else if (this.state === STATE.ZOOM) {
+                    if (this.deltaVector.y > 0) {
+                        this.$map.zoomOut(1 / TOUCH_SCALE_STEP);
+                    } else {
+                        this.$map.zoomIn(TOUCH_SCALE_STEP);
+                    }
+                } else if ((this.state === STATE.CLICK && delta > 2) || this.state === STATE.PAN) {
+                    this.state = STATE.PAN;
+                    this.pan(this.startPosition, this.endPosition);
                 }
-            } else if (this.state === STATE.CLICK || this.state === STATE.PAN) {
-                this.state = STATE.PAN;
-                this.pan(this.startPosition, this.endPosition);
+                if (this.state !== STATE.CLICK) {
+                    this.startPosition.copy(this.endPosition);
+                }
             }
-            this.startPosition.copy(this.endPosition);
         }
         if (this.onHoverListener && this.wrapper.contains(e.target)) {
             this.onHoverListener(e);
@@ -49232,7 +49247,7 @@ class FloorControl extends BaseControl {
 }
 
 class MapEvent {
-    constructor({ type, x, y, floor, target, currentTarget, domEvent, address, hovered }) {
+    constructor({ type, x, y, floor, target, currentTarget, domEvent, address, hovered, outside }) {
         Object.defineProperties(this, {
             type: {
                 configurable: false,
@@ -49278,6 +49293,11 @@ class MapEvent {
                 configurable: false,
                 writable: false,
                 value: hovered,
+            },
+            outside: {
+                configurable: false,
+                writable: false,
+                value: outside,
             },
         });
     }
@@ -49347,6 +49367,7 @@ function intersectObjects(eventType, mo, e) {
     let point = e.touches ? e.touches[0] : e;
     mouse.set(point.offsetX, point.offsetY);
 
+    if (typeof eventType === 'string') eventType = [eventType];
     let objects = Array.from(mo.mapScene.floors);
     if (!__pickMode__.get(mo)) {
         objects.splice(
@@ -49357,7 +49378,7 @@ function intersectObjects(eventType, mo, e) {
                     it =>
                         it.object3D &&
                         it.hasEventListener &&
-                        it.hasEventListener(eventType) &&
+                        eventType.find(it2 => it.hasEventListener(it2)) &&
                         it.object3D.parent &&
                         it.object3D.parent.visible
                 )
@@ -49408,6 +49429,7 @@ function dispatchMapEvent(mo, type, e, intersects, overlay) {
                     currentTarget: overlay,
                     domEvent: e,
                     address: `${mo.mapScene.name} ${floor.object.name} ${(room && room.object.name) || ''}`.trim(),
+                    outside: false,
                 }),
             });
         } else {
@@ -49416,6 +49438,7 @@ function dispatchMapEvent(mo, type, e, intersects, overlay) {
                 message: new MapEvent({
                     type,
                     domEvent: e,
+                    currentTarget: overlay,
                     outside: true,
                 }),
             });
@@ -49423,7 +49446,20 @@ function dispatchMapEvent(mo, type, e, intersects, overlay) {
     }
 }
 
-const initEvent = function(mo) {
+function updateCursor(mo, intersects) {
+    let overlay = null;
+    if (intersects && intersects.length > 0) {
+        intersects = intersects.filter(
+            it => !it.object.handler || !it.object.handler.isOverlay || it.object.handler.hasEventListener('click')
+        );
+        if (intersects.length > 0) {
+            overlay = pickOverlay(intersects);
+        }
+    }
+    mo.$mapWrapper.classList[overlay ? 'add' : 'remove']('clickable');
+}
+
+function initEvents(mo) {
     mo.gestureControl.onClickListener = e => {
         if (__pickMode__.get(mo) && e.button !== 0) return
         let eventType = e.button === 0 ? 'click' : 'rightClick';
@@ -49448,11 +49484,10 @@ const initEvent = function(mo) {
                     type: 'hover',
                     message: new MapEvent({ type: 'hover', target: overlay, domEvent: e, hovered: false }),
                 });
-                mo.$mapWrapper.classList.remove('clickable');
             }
         }
-        // if (__pickMode__.get(mo)) return
-        let intersects = intersectObjects('hover', mo, e);
+        let intersects = intersectObjects(['hover', 'click'], mo, e);
+        updateCursor(mo, intersects);
         let overlay = null;
         if (intersects && intersects.length > 0) {
             overlay = pickOverlay(intersects);
@@ -49465,16 +49500,13 @@ const initEvent = function(mo) {
                     type: 'hover',
                     message: new MapEvent({ type: 'hover', target: overlay, domEvent: e, hovered: true }),
                 });
-                if (overlay.hasEventListener('click')) {
-                    mo.$mapWrapper.classList.add('clickable');
-                }
             }
         }
         dispatchMapEvent(mo, 'hover', e, intersects, overlay);
     };
-};
+}
 
-const mixinMapObject = function(Class) {
+function mixinMapObject(Class) {
     eventMixin(Class);
     Object.defineProperties(Class.prototype, {
         isMapObject: {
@@ -49488,7 +49520,7 @@ const mixinMapObject = function(Class) {
             },
         },
     });
-};
+}
 
 const parsePoints = array => {
     var points = [];
@@ -50458,16 +50490,9 @@ function changeTheme$1(mo, theme) {
             object.children.forEach(obj => changeTheme$$1(obj));
         }
     }
-    let { background = '#f9f9f9' } = theme;
-    if (typeof background === 'object') {
-        let { color, alpha = 1 } = background;
-        clearRenderer(mo, color, alpha);
-    } else {
-        if (typeof background !== 'string') {
-            background = '#f9f9f9';
-        }
-        clearRenderer(mo, background, 1);
-    }
+
+    clearRenderer(mo, mo.backgroundColor);
+
     if (mo.mapScene) {
         mo.mapScene.boundNeedsUpdate = true;
         changeTheme$$1(mo.mapScene);
@@ -50486,10 +50511,10 @@ function loaderMixin(XMap) {
                         changeTheme$1(this, this.themeLoader.getTheme(__currentTheme__.get(this)));
 
                         mapScene.showFloor('F1');
-                        
+
                         this.dispatchEvent({ type: 'mapLoaded' });
                         resolve(this);
-                        
+
                         this._overlays.forEach(overlay => this._addOverlay(overlay));
                     })
                     .catch(e => reject(e));
@@ -50512,7 +50537,7 @@ function loaderMixin(XMap) {
         },
 
         getMapStyle() {
-            return this.themeLoader.getTheme()
+            return this.themeLoader.getTheme(__currentTheme__.get(this))
         },
     });
 }
@@ -50540,6 +50565,7 @@ function initState(mo) {
         showAllFloors = false,
         showNames = true,
         showPubPoints = true,
+        backgroundColor,
     } = mo.options;
     let state = {
         rotateAngle: rotateAngle,
@@ -50553,6 +50579,7 @@ function initState(mo) {
         showAllFloors: !!showAllFloors,
         showNames: !!showNames,
         showPubPoints: !!showPubPoints,
+        backgroundColor,
     };
     let resetState = {
         ...state,
@@ -50761,6 +50788,10 @@ function stateMixin(XMap) {
             this.dispatchEvent({ type: 'stateChanged' });
         },
 
+        forceUpdate() {
+            __mapState__.get(this).needsUpdate = true;
+        },
+
         _scale_(scalar) {
             let scale = __mapState__.get(this).scale * scalar;
             scale = Math.min(MAX_SCALE, Math.max(MIN_SCALE, scale));
@@ -50865,6 +50896,11 @@ function stateMixin(XMap) {
                 __mapState__.get(this).needsUpdate = true;
             },
         },
+        backgroundColor: {
+            get: function() {
+                return __mapState__.get(this).backgroundColor || this.getMapStyle().background || 'white'
+            },
+        },
     });
 }
 
@@ -50883,20 +50919,20 @@ function initMixin(XMap) {
 
             Object.defineProperties(this, {
                 gestureControl: {
-                    configurable:false,
+                    configurable: false,
                     writable: false,
                     enumerable: false,
-                    value: new GestureControl(this)
+                    value: new GestureControl(this),
                 },
                 floorControl: {
-                    configurable:false,
+                    configurable: false,
                     writable: false,
                     enumerable: false,
-                    value: new FloorControl(this)
-                }
+                    value: new FloorControl(this),
+                },
             });
 
-            initEvent(this);
+            initEvents(this);
 
             initLoaders(this);
             startRenderer(this);
@@ -50905,8 +50941,8 @@ function initMixin(XMap) {
     Object.defineProperties(XMap.prototype, {
         isMap: {
             writable: false,
-            value: true
-        }
+            value: true,
+        },
     });
 }
 
@@ -50940,13 +50976,16 @@ function styleInject(css, ref) {
 var css = ".xmap-container{overflow:hidden;width:100%;height:100%;cursor:grab}.xmap-container.grabbing{cursor:grabbing}.xmap-container.clickable,.xmap-container.picking{cursor:pointer}.xmap-controls,.xmap-overlays{width:100%;height:100%;position:absolute;left:0;top:0;pointer-events:none;overflow:hidden}.xmap-controls{z-index:2}.xmap-overlays{z-index:1}.xmap-controls *,.xmap-overlays *{pointer-events:auto}.xmap-floor-control{position:absolute;right:10px;top:10px;z-index:3;background:#fff;border:1px solid #dfdfdf;text-align:center;border-radius:3px;font-size:14px;padding:0;color:#333}.xmap-floor-control li{list-style:none;line-height:40px;width:40px;height:40px;border-bottom:1px solid #dfdfdf;-ms-user-select:none;-webkit-user-select:none;user-select:none;cursor:pointer}.xmap-floor-control li:last-child{border-bottom:none}.xmap-floor-control .active:not(.btn-all){background-color:#e6e6e6;box-shadow:inset 0 3px 5px rgba(0,0,0,.125);outline:0}.xmap-floor-control .btn-all.active{background:#3c84d0;color:#fff}";
 styleInject(css);
 
+function makeProxy(Class) {
+    // return new Proxy(Class, handler)
+    return Class
+}
+
 class XMap {
     constructor(el, options = {}) {
-
         console.log(`XMap init start. ${REVISION$1}`);
 
         this._init_(el, options);
-        
     }
 }
 initMixin(XMap);
@@ -50955,6 +50994,8 @@ overlayMixin(XMap);
 loaderMixin(XMap);
 viewMixin(XMap);
 stateMixin(XMap);
+
+var xmap = makeProxy(XMap);
 
 class Location {
     constructor(floor, x, y, z = 0) {
@@ -51124,6 +51165,7 @@ class Overlay {
     removeFromParent() {
         if (this.object3D && this.object3D.parent) {
             this.object3D.parent.remove(this.object3D);
+            if (this.$map) this.$map.forceUpdate();
         }
     }
 }
@@ -51270,7 +51312,7 @@ function initObject3D(obj, location) {
         sprite.center.set(0.5, 0.5);
     }
     sprite.scale.set(1e-7, 1e-7, 1);
-    sprite.renderOrder = 20;
+    sprite.renderOrder = 100;
     sprite.onViewModeChange = is3dMode => sprite.position.setZ(is3dMode ? location.z : 4);
     return sprite
 }
@@ -51355,6 +51397,7 @@ class Marker extends Overlay {
                 throw new Error('invalid floor')
             }
         }
+        if (this.$map) this.$map.forceUpdate();
     }
 }
 
@@ -51553,4 +51596,4 @@ Object.defineProperties(HTMLInfoWindow.prototype, {
     },
 });
 
-export { XMap as Map, REVISION$1 as REVISION, ViewMode, Location, Point, Overlay, HTMLOverlay, Marker, Polyline, Polygon, HTMLInfoWindow };
+export { xmap as Map, REVISION$1 as REVISION, ViewMode, Location, Point, Overlay, HTMLOverlay, Marker, Polyline, Polygon, HTMLInfoWindow };

@@ -2,12 +2,14 @@
 import * as XMap from '../src'
 import Stats from './stats.min'
 import { addEvent } from '../src/utils/event'
+import { white } from 'ansi-colors';
 
 var map = new XMap.Map('#indoor-map', {
     // viewMode: XMap.ViewMode.MODE_2D,
     // showAllFloors: true,
     // showNames: false,
-    // showPubPoints: false
+    // showPubPoints: false,
+    
 })
 map.load('./data.json')
 window.map = map
@@ -84,7 +86,7 @@ addEvent(document.getElementById('button-3d'), 'click', () => map.setViewMode(XM
 const stats = new Stats()
 stats.domElement.style.position = 'absolute'
 stats.domElement.style.top = '0'
-// document.getElementsByTagName('body')[0].appendChild(stats.domElement)
+document.getElementsByTagName('body')[0].appendChild(stats.domElement)
 
 function animate() {
     requestAnimationFrame(animate)
